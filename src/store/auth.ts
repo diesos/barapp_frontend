@@ -1,35 +1,31 @@
-// stores/auth.ts
 import { defineStore } from 'pinia'
-import { router } from '../router'
-import api from '../utils/axios'
-// ✅ import nommé, disponible dans jwt-decode
-// ✅ import nommé, disponible dans jwt-decode
 import { jwtDecode } from 'jwt-decode'
 import { toast } from 'vue3-toastify'
+import api from '../utils/axios'
+import router from '../router'
 
-// 1) Définissez l'interface de votre payload, adaptée à votre token
+// Interface pour le payload JWT selon ton backend JWTService.java
 export interface JwtPayload {
-  iat: number
-  exp: number
-  roles: string[]
-  username: string
-  id: number
-  email: string
-  id_client: number
-  auth_token: string
-  language: string
-  magasin_id: number
+  EMAIL: string;
+  USER_ID: number;
+  ROLE: string;
+  exp: number;
+  iss: string;
 }
 
 export const useAuthStore = defineStore('auth', {
   state: () => {
+
+
+
+    // Récupération du token depuis localStorage
     const token = localStorage.getItem('token')
     let payload: JwtPayload | null = null
 
     if (token) {
       try {
         payload = jwtDecode<JwtPayload>(token)
-        // Si déjà expiré, on va forcer un logout en nextTick
+        // Si déjà expiré, on nettoie
         if (Date.now() / 1000 >= payload.exp) {
           payload = null
           localStorage.removeItem('token')
@@ -53,71 +49,124 @@ export const useAuthStore = defineStore('auth', {
     isAuthenticated: (state): boolean =>
       !!state.token && !!state.payload,
 
-    // Exemples d’infos utilisateur tirées du payload
-    userEmail: (state): string | null => state.payload?.email ?? null,
-    userNom:   (state): string | null => state.payload?.username ?? null,
-    userRoles: (state): string[]      => state.payload?.roles ?? [],
-    isSuperAdmin: (state): boolean       =>
-        state.payload?.roles.includes('ROLE_SUPER_ADMIN') ?? false,
-      getUserId: (state): number | null => state.payload?.id ?? null,
-      getUserIdClient: (state): number | null => state.payload?.id_client ?? null,
-      getUserIdMagasin: (state): number | null => state.payload?.magasin_id ?? null,
-      getUserLanguage: (state): string | null => state.payload?.language ?? null,
+    // Infos utilisateur tirées du payload
+    userEmail: (state): string | null => state.payload?.EMAIL ?? null,
+    userId: (state): number | null => state.payload?.USER_ID ?? null,
+    userRole: (state): string | null => state.payload?.ROLE ?? null,
 
-          // Date d'expiration pour un éventuel affichage
+    // Helpers pour les rôles
+    isUser: (state): boolean => state.payload?.ROLE === 'ROLE_USER',
+    isBarmaker: (state): boolean => state.payload?.ROLE === 'ROLE_BARMAKER',
+    isAdmin: (state): boolean => state.payload?.ROLE === 'ROLE_ADMIN',
+
+    // Date d'expiration
     expiresAt: (state): Date | null =>
-        state.payload ? new Date(state.payload.exp * 1000) : null,
-    getToken: (state): string | null => localStorage.getItem('token') ?? null,
+      state.payload ? new Date(state.payload.exp * 1000) : null,
   },
 
   actions: {
     init() {
-        this.initAutoLogout()
+      this.initAutoLogout()
     },
-    // Si vous voulez lancer l'auto-logout après le chargement
+
+    // Auto-logout avant expiration
     initAutoLogout() {
       if (!this.payload) return
+
       const ms = this.payload.exp * 1000 - Date.now()
       if (ms <= 0) {
         return this.logout()
       }
+
       this.logoutTimer = setTimeout(() => {
         this.logout()
-        router.push({name: 'Login'})
+        toast.error('Session expirée, veuillez vous reconnecter')
+        router.push('/login')
       }, ms)
     },
 
-    // Appel de login : on récupère token, on décode et on schedule
-    async login(username: string, password: string) {
+    // Login avec les endpoints de ton backend
+    async login(email: string, password: string) {
       try {
-        const { data } = await api.post('auth-tokens-admin-manager', {
-          login: username,
+        const { data } = await api.post('/api/auth/login', {
+          email: email,
           password: password,
         })
-        // 1) Stocker le token
-        this.payload = jwtDecode<JwtPayload>(data.token)
-        this.token = data.token
-        if (!this.payload) {
-          toast.error('Token invalide ou mal formé')
-          return
+
+        // Stocker le token
+        this.token = data
+        localStorage.setItem('token', data)
+
+        // Décoder le payload
+        try {
+          this.payload = jwtDecode<JwtPayload>(data)
+        } catch (error) {
+          console.error('Erreur décodage JWT:', error)
+          throw new Error('Token invalide reçu du serveur')
         }
-        if (this.token){
-        localStorage.setItem('token', this.token)
-        }
-        else {
-          toast.error('Token invalide ou mal formé')
-          return
-        }
-        toast.success(`Connexion réussie ! Bienvenu  ${this.payload.username} `, { autoClose: 1000 })
-        // 3) Planifier la déconnexion auto
+
+        toast.success(`Connexion réussie ! Bienvenue ${this.userEmail}`, {
+          autoClose: 2000
+        })
+
+        // Planifier la déconnexion auto
         this.initAutoLogout()
+
+        // Redirection selon le rôle
         setTimeout(() => {
-          router.push(this.returnUrl || {name: 'Dashboard1'})
+          if (this.returnUrl) {
+            router.push(this.returnUrl)
+            this.returnUrl = null
+          } else {
+            // Redirection par défaut selon le rôle
+            if (this.isBarmaker || this.isAdmin) {
+              router.push('/orders-management')
+            } else {
+              router.push('/menu')
+            }
+          }
+        }, 1000)
+
+      } catch (error: any) {
+        console.error('Erreur login:', error)
+
+        if (error.response?.status === 401) {
+          throw new Error('Email ou mot de passe incorrect')
+        } else if (error.response?.status === 403) {
+          throw new Error('Compte non autorisé')
+        } else {
+          throw new Error('Erreur de connexion. Veuillez réessayer.')
         }
-        , 1000)
-      } catch (err) {
-        console.error(err)
-        throw err
+      }
+    },
+
+    // Register avec les endpoints de ton backend
+    async register(email: string, password: string) {
+      try {
+        const { data } = await api.post('/api/auth/register', {
+          email: email,
+          password: password,
+        })
+
+        toast.success('Inscription réussie ! Vous pouvez maintenant vous connecter.', {
+          autoClose: 3000
+        })
+
+        // Rediriger vers login après inscription
+        setTimeout(() => {
+          router.push('/login')
+        }, 1500)
+
+        return data
+
+      } catch (error: any) {
+        console.error('Erreur register:', error)
+
+        if (error.response?.status === 409) {
+          throw new Error('Cette adresse email est déjà utilisée')
+        } else {
+          throw new Error('Erreur lors de l\'inscription. Veuillez réessayer.')
+        }
       }
     },
 
@@ -125,16 +174,35 @@ export const useAuthStore = defineStore('auth', {
       // Nettoyage total
       this.token = null
       this.payload = null
+      this.returnUrl = null
+
       if (this.logoutTimer) {
         clearTimeout(this.logoutTimer)
         this.logoutTimer = null
       }
-      toast.error('Déconnexion réussie !', { autoClose: 2000 })
+
       localStorage.removeItem('token')
+
+      toast.info('Déconnexion réussie !', { autoClose: 2000 })
+
       setTimeout(() => {
-        router.push({name: 'Login'})
-      }
-      , 1000)
+        router.push('/login')
+      }, 1000)
     },
+
+    // Méthode pour sauvegarder l'URL de retour
+    setReturnUrl(url: string) {
+      this.returnUrl = url
+    },
+
+    // Vérifier si l'utilisateur a un rôle spécifique
+    hasRole(role: string): boolean {
+      return this.userRole === role
+    },
+
+    // Vérifier si l'utilisateur a au moins un des rôles
+    hasAnyRole(roles: string[]): boolean {
+      return roles.includes(this.userRole || '')
+    }
   },
 })

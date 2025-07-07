@@ -22,8 +22,8 @@
         <div class="nav-logo">
           <v-icon size="40" color="primary">mdi-glass-cocktail</v-icon>
           <div class="nav-title">
-            <h2>BarCraft</h2>
-            <span class="nav-subtitle">{{ userType === 'client' ? 'Client' : 'Barmaker' }}</span>
+            <h2 color="blue">BarCraft</h2>
+            <span class="nav-subtitle">{{ userType }}</span>
           </div>
         </div>
       </div>
@@ -136,7 +136,13 @@
         <v-list class="user-menu">
           <v-list-item>
             <v-list-item-title>{{ userEmail }}</v-list-item-title>
-            <v-list-item-subtitle>{{ userType }}</v-list-item-subtitle>
+            <v-list-item-subtitle>
+                                    <v-chip
+                        :color="getRoleColor(userType)"
+                        size="small"
+                        variant="tonal"
+                      >{{ userType }}
+                      </v-chip></v-list-item-subtitle>
           </v-list-item>
           <v-divider />
           <v-list-item @click="$router.push('/profile')">
@@ -211,11 +217,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useDisplay } from 'vuetify'
+import { useAuthStore } from './store/auth'
+
 
 // Composables
 const router = useRouter()
 const route = useRoute()
 const { mobile } = useDisplay()
+
+const authStore = useAuthStore()
 
 // Reactive data
 const drawer = ref(!mobile.value)
@@ -251,6 +261,8 @@ const menuItems = computed(() => {
       { title: 'Commandes', value: 'orders-management', icon: 'mdi-clipboard-list', to: '/orders-management' },
       { title: 'Gestion Carte', value: 'menu-management', icon: 'mdi-cog', to: '/menu-management' },
       { title: 'Nouveau Cocktail', value: 'create-cocktail', icon: 'mdi-plus', to: '/create-cocktail' },
+      { title: 'Gestion des Recettes', value: 'recipe-management', icon: 'mdi-notebook-edit', to: '/recipe-management' },
+      { title: 'Gestion des ingrédients', value: 'ingredient-management', icon: 'mdi-spa', to: '/ingredient-management' },
       { title: 'Statistiques', value: 'stats', icon: 'mdi-chart-bar', to: '/stats' },
       { title: 'Profil', value: 'profile', icon: 'mdi-account', to: '/profile' }
     ]
@@ -272,9 +284,35 @@ const showSnackbar = (message, color = 'success') => {
   }
 }
 
+  const getRoleColor = (role) => {
+  switch (role) {
+    case 'ROLE_ADMIN': return 'error'
+    case 'Administrateur': return 'error'
+    case 'ROLE_BARMAKER': return 'warning'
+    case 'Barmaker': return 'warning'
+    case 'ROLE_USER': return 'primary'
+    case 'Client': return 'primary'
+    default: return 'grey'
+  }
+}
+
+const getRoleLabel = (role) => {
+  switch (role) {
+    case 'ROLE_ADMIN': return 'Administrateur'
+    case 'ROLE_BARMAKER': return 'Barmaker'
+    case 'ROLE_USER': return 'Client'
+    default: return 'Inconnu'
+  }
+}
+
+
 // Lifecycle
 onMounted(() => {
-  // Initialisation
+
+
+  // Récupérer les informations de l'utilisateur depuis le store
+  userType.value = getRoleLabel(authStore.userRole) || 'client'
+  userEmail.value = authStore.userEmail || ''
 })
 </script>
 

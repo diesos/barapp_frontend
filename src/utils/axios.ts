@@ -1,90 +1,85 @@
 import axios from "axios";
-// import router from "./router";
-import apiUrl from "../constant/constant.ts";
-// ✅ import nommé, disponible dans jwt-decode
-import { jwtDecode } from 'jwt-decode'
-import { toast } from 'vue3-toastify'
-import { useRouter } from 'vue-router'
-const router = useRouter()
+import { apiUrl } from "../constant/constant";
+import { jwtDecode } from 'jwt-decode';
 
-
+// Interface pour le payload JWT selon ton backend JWTService.java
 interface JwtPayload {
-	email: string; // Email de l'utilisateur
-  exp: number; // Date d'expiration du token
-  ROLE: string; // Identifiant du token
-  USER_ID: number; // Identifiant de l'utilisateur
-};
-
+  EMAIL: string;
+  USER_ID: number;
+  ROLE: string;
+  exp: number;
+  iss: string;
+}
 
 const api = axios.create({
-  baseURL: apiUrl ,
+  baseURL: apiUrl,
   headers: {
-	"Content-Type": "application/json",
-	'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
+    "Content-Type": "application/json",
   }
 });
 
-
-
+// Request interceptor
 api.interceptors.request.use(
   (config) => {
+    const token = localStorage.getItem('token');
 
-	  let raw = localStorage.getItem('token');
-	  if (!raw) return config;
-	  const { exp }: JwtPayload = jwtDecode(raw);
-	  // Si vous stockez "Bearer <votre_jwt>", on enlève le préfixe
-	  if (raw.startsWith('Bearer ')) {
-		raw = raw.slice(7);
-	  }
-	const token = localStorage.getItem("token");
-	const decodedToken = localStorage.getItem("token");
-	if (token) {
-	  if (isTokenExpired(token)) {
-		toast.error("🔴 Token expiré, suppression du token, merci de vous reconnecter", {
-		  position: "top-right",
-		  autoClose: 5000,
-		  hideProgressBar: false,
-		  closeOnClick: true,
-		  pauseOnHover: true,
-		  progress: undefined,
-		});
-		localStorage.removeItem("token");
-		router.push({name : "login"});
-		// Si le token est expiré, on le supprime et on redirige vers la page de connexion
-		return Promise.reject(new Error("Token expiré, suppression du token, merci de vous reconnecter"));
+    if (token) {
+      try {
+        // Vérifier si le token est expiré
+        const decoded: JwtPayload = jwtDecode(token);
+        const currentTime = Date.now() / 1000;
 
-	  }
-	  config.headers.set('x-auth-token', raw);
-	  config.headers.set('Content-Type', 'application/json');
-	}
-	return config;
+        if (decoded.exp < currentTime) {
+          // Token expiré
+          console.log("🔴 Token expiré, suppression automatique");
+          localStorage.removeItem('token');
+
+          // Rediriger vers login seulement si on n'y est pas déjà
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
+
+          return Promise.reject(new Error("Token expiré"));
+        }
+
+        // Ajouter le token dans les headers
+        config.headers.Authorization = `Bearer ${token}`;
+
+      } catch (error) {
+        // Token malformé
+        console.error("🔴 Token malformé:", error);
+        localStorage.removeItem('token');
+
+        if (!window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
+
+        return Promise.reject(new Error("Token invalide"));
+      }
+    }
+
+    return config;
   },
   (error) => Promise.reject(error)
 );
 
-
+// Response interceptor
 api.interceptors.response.use(
-  (response) => response, // Si la réponse est OK, on la retourne
+  (response) => response,
   (error) => {
-	if (error.response?.status === 401) {
-	  console.log("🔴 Token invalide ou utilisateur non authentifié");
-	  localStorage.removeItem("token");
-	  router.push("/login");
-	}
-	return Promise.reject(error);
+    // Si erreur 401, token invalide côté serveur
+    if (error.response?.status === 401) {
+      console.log("🔴 Unauthorized (401) - Token invalide côté serveur");
+      localStorage.removeItem('token');
+
+      // Rediriger vers login seulement si on n'y est pas déjà
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
+
+    return Promise.reject(error);
   }
 );
-
-const isTokenExpired = (token: any) => {
-  if (!token) return true;
-  try {
-	const decoded = jwtDecode(token);
-	if (!decoded.exp) return true; // Si pas de `exp`, on considère que le token est invalide
-	return decoded.exp * 1000 < Date.now(); // Vérifie si `exp` est passé
-  } catch (error) {
-	return true; // Si erreur, considère que le token est invalide
-  }
-};
-
 
 export default api;
