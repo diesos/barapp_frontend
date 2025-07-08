@@ -8,6 +8,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('../views/Home.vue'),
   },
   {
+    path: '/menu',
+    name: 'Menu',
+    component: () => import('../views/Menu.vue'),
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('../views/auth/Auth.vue'),
@@ -18,12 +23,22 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('../views/auth/Profile.vue'),
   },
   {
-    path: '/recipe-management',
+    path: '/admin/cocktails',
+    name: 'CocktailManagement',
+    component: () => import('../views/crud/Cocktail.vue'),
+  },
+  {
+    path: '/admin/categories',
+    name: 'CategorieManagement',
+    component: () => import('../views/crud/Categorie.vue'),
+  },
+  {
+    path: '/admin/recipes',
     name: 'RecipeManagement',
     component: () => import('../views/crud/Recipe.vue'),
   },
   {
-    path: '/ingredient-management',
+    path: '/admin/ingredients',
     name: 'IngredientManagement',
     component: () => import('../views/crud/Ingredient.vue'),
   }

@@ -31,22 +31,21 @@
       <v-divider class="nav-divider" />
 
       <!-- Navigation Items -->
-      <v-list nav class="nav-list">
-        <v-list-item
-          v-for="item in menuItems"
-          :key="item.value"
-          :to="item.to"
-          :value="item.value"
-          class="nav-item"
-          rounded="xl"
-        >
-          <template #prepend>
-            <v-icon :icon="item.icon" size="20" />
-          </template>
-          <v-list-item-title>{{ item.title }}</v-list-item-title>
-        </v-list-item>
-      </v-list>
-
+        <v-list nav class="nav-list">
+    <v-list-item
+      v-for="item in displayedMenuItems"
+      :key="item.value"
+      :to="item.to"
+      :value="item.value"
+      class="nav-item"
+      rounded="xl"
+    >
+      <template #prepend>
+        <v-icon :icon="item.icon" size="20" />
+      </template>
+      <v-list-item-title>{{ item.title }}</v-list-item-title>
+    </v-list-item>
+  </v-list>
       <!-- Footer -->
       <template #append>
         <div class="nav-footer">
@@ -77,7 +76,7 @@
       />
 
       <v-app-bar-title class="app-title">
-        {{ currentPageTitle }}
+        {{ currentPageTitle? currentPageTitle : 'BarCraft' }}
       </v-app-bar-title>
 
       <v-spacer />
@@ -242,32 +241,54 @@ const snackbar = ref({
   timeout: 3000
 })
 
-// Computed
-const currentPageTitle = computed(() => {
-  const currentItem = menuItems.value.find(item => item.to === route.path)
-  return currentItem?.title || 'Dashboard'
-})
 
-const menuItems = computed(() => {
-  if (userType.value === 'client') {
+
+const currentPageTitle = computed(() => {
+  // On utilise la nouvelle propriété calculée qu'on va créer juste après
+  const currentItem = displayedMenuItems.value.find(item => item.to === route.path);
+  return currentItem?.title || 'Tableau de bord'; // Utilise le titre trouvé ou une valeur par défaut
+});
+
+// Items pour TOUS les utilisateurs (clients inclus)
+const baseMenuItems = [
+  { title: 'Carte', value: 'menu', icon: 'mdi-silverware', to: '/menu' },
+  { title: 'Mes Commandes', value: 'orders', icon: 'mdi-clock-outline', to: '/orders' },
+  { title: 'Profil', value: 'profile', icon: 'mdi-account', to: '/profile' }
+];
+
+// Items UNIQUEMENT pour les administrateurs
+const adminOnlyMenuItems = [
+    { title: 'Commandes en cours', value: 'orders-management', icon: 'mdi-clipboard-list', to: '/admin/orders' },
+    { title: 'Gestion Carte', value: 'menu-management', icon: 'mdi-cog', to: '/admin/menu' },
+    { title: 'Gestion Categories', value: 'categorie-management', icon: 'mdi-shape-plus', to: '/admin/categories' },
+    { title: 'Gestion Cocktails', value: 'cocktail-management', icon: 'mdi-glass-pint-outline', to: '/admin/cocktails' },
+    { title: 'Gestion Recettes', value: 'recipe-management', icon: 'mdi-notebook-edit', to: '/admin/recipes' },
+    { title: 'Gestion Ingrédients', value: 'ingredient-management', icon: 'mdi-spa', to: '/admin/ingredients' },
+    { title: 'Statistiques', value: 'stats', icon: 'mdi-chart-bar', to: '/admin/stats' },
+];
+
+const clientMenuItems = computed(() => {
+    // Les clients ont le menu de base + le panier
     return [
-      { title: 'Carte', value: 'menu', icon: 'mdi-silverware', to: '/menu' },
+      ...baseMenuItems,
       { title: 'Panier', value: 'cart', icon: 'mdi-cart', to: '/cart' },
-      { title: 'Mes Commandes', value: 'orders', icon: 'mdi-clock-outline', to: '/orders' },
-      { title: 'Profil', value: 'profile', icon: 'mdi-account', to: '/profile' }
-    ]
-  } else {
-    return [
-      { title: 'Commandes', value: 'orders-management', icon: 'mdi-clipboard-list', to: '/orders-management' },
-      { title: 'Gestion Carte', value: 'menu-management', icon: 'mdi-cog', to: '/menu-management' },
-      { title: 'Nouveau Cocktail', value: 'create-cocktail', icon: 'mdi-plus', to: '/create-cocktail' },
-      { title: 'Gestion des Recettes', value: 'recipe-management', icon: 'mdi-notebook-edit', to: '/recipe-management' },
-      { title: 'Gestion des ingrédients', value: 'ingredient-management', icon: 'mdi-spa', to: '/ingredient-management' },
-      { title: 'Statistiques', value: 'stats', icon: 'mdi-chart-bar', to: '/stats' },
-      { title: 'Profil', value: 'profile', icon: 'mdi-account', to: '/profile' }
-    ]
+    ];
+});
+
+const adminMenuItems = computed(() => {
+    // Les admins ont tout
+    return [...baseMenuItems, ...adminOnlyMenuItems];
+});
+
+// LA PROPRIÉTÉ MAGIQUE !
+// Elle choisit quelle liste afficher.
+const displayedMenuItems = computed(() => {
+  if (userType.value === 'Administrateur') {
+    return adminMenuItems.value;
   }
-})
+  // Par défaut, on retourne le menu client
+  return clientMenuItems.value;
+});
 
 // Methods
 const logout = () => {
@@ -318,6 +339,28 @@ onMounted(() => {
 
 <style scoped>
 /* Variables CSS personnalisées */
+
+.admin-divider {
+  position: relative;
+  margin: 20px 0;
+  border-color: #333;
+  border-width: 2px;
+}
+
+.admin-divider-text {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: white;
+  transform: translate(-50%, -50%);
+  padding: 0 16px;
+  font-weight: bold;
+  color: #333;
+  letter-spacing: 2px;
+  font-size: 0.95rem;
+}
+
+
 :root {
   --primary-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   --secondary-gradient: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
