@@ -72,6 +72,7 @@
             :loading="loading"
             item-value="id"
             class="elevation-0"
+            item-key="id"
           >
             <!-- Image/Icon column -->
             <template #item.image="{ item }">
