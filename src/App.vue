@@ -101,21 +101,85 @@
       </v-btn>
 
       <!-- Notifications -->
-      <v-btn
-        icon
-        size="large"
-        class="notification-btn"
+<!-- Cart Button in AppBar -->
+<v-menu offset-y min-width="340">
+  <template #activator="{ props }">
+    <v-btn v-bind="props" icon>
+      <v-badge
+        :content="cartCount"
+        :model-value="cartCount > 0"
+        color="error"
+        offset-x="-4"
+        offset-y="-4"
       >
-        <v-badge
-          :content="notificationCount"
-          :model-value="notificationCount > 0"
-          color="error"
-          offset-x="2"
-          offset-y="2"
+        <v-icon>mdi-cart</v-icon>
+      </v-badge>
+    </v-btn>
+  </template>
+  <v-list class="cart-popup-list pa-0">
+    <v-list-item>
+      <v-list-item-title class="text-lg font-bold py-1">Mon Panier</v-list-item-title>
+    </v-list-item>
+    <v-divider/>
+    <template v-if="!basket || basket.basketLines.length === 0">
+      <v-list-item>
+        <v-list-item-title class="text-grey">Panier vide</v-list-item-title>
+      </v-list-item>
+    </template>
+    <template v-else>
+      <div class="cart-mini-list">
+        <v-list-item
+          v-for="line in basket.basketLines"
+          :key="line.id"
+          class="cart-line-item"
         >
-          <v-icon>mdi-cart</v-icon>
-        </v-badge>
-      </v-btn>
+          <template #prepend>
+            <v-avatar size="38" rounded>
+              <img
+                v-if="line.cocktail.imageUrl"
+                :src="line.cocktail.imageUrl"
+                :alt="line.cocktail.name"
+                style="object-fit:cover;"
+              />
+              <v-icon v-else color="grey">mdi-glass-cocktail</v-icon>
+            </v-avatar>
+          </template>
+          <div class="cart-line-info">
+            <div class="cart-line-main">
+              <span class="cart-name">{{ line.cocktail.name }}</span>
+              <span class="cart-size">({{ line.cocktailSize.size }})</span>
+            </div>
+            <div class="cart-line-details">
+              <span class="cart-qty">x{{ line.quantity }}</span>
+              <span class="cart-unit">@{{ (line.unitPrice / 100).toFixed(2) }} €</span>
+            </div>
+          </div>
+          <div class="cart-line-price ml-auto font-bold text-right">
+            {{ ((line.unitPrice * line.quantity) / 100).toFixed(2) }} €
+          </div>
+        </v-list-item>
+      </div>
+      <v-divider class="my-1" />
+      <v-list-item>
+        <v-list-item-title class="font-bold">
+          Total&nbsp;: <span class="text-primary">{{ (cartTotal / 100).toFixed(2) }} €</span>
+        </v-list-item-title>
+        <v-spacer />
+        <v-btn
+          color="primary"
+          size="small"
+          class="rounded-xl font-bold"
+          @click="$router.push('/cart')"
+        >
+          Voir le panier
+        </v-btn>
+      </v-list-item>
+    </template>
+  </v-list>
+</v-menu>
+
+
+
 
       <!-- User Menu -->
       <v-menu offset-y>
@@ -217,6 +281,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from './store/auth'
+import { useBasketStore } from './store/basket'
+import api from './utils/axios'
 
 
 // Composables
@@ -225,13 +291,13 @@ const route = useRoute()
 const { mobile } = useDisplay()
 
 const authStore = useAuthStore()
+const basketStore = useBasketStore()
 
 // Reactive data
 const drawer = ref(!mobile.value)
 const loading = ref(false)
 const userType = ref('client') // 'client' ou 'barmaker'
 const userEmail = ref('user@example.com')
-const cartCount = ref(3)
 const notificationCount = ref(2)
 
 const snackbar = ref({
@@ -240,6 +306,32 @@ const snackbar = ref({
   color: 'success',
   timeout: 3000
 })
+
+
+const basket = computed(() => basketStore.basket)
+const cartCount = computed(() => basketStore.cartCount)
+const cartTotal = computed(() => basketStore.cartTotal)
+
+async function fetchCart() {
+  const { data } = await api.get('/api/basket')
+  basket.value = data
+  cartItems.value = data.basketLines
+  cartTotal.value = data.totalAmount // adapte selon ton modèle
+  cartCount.value = cartItems.value.reduce((acc, curr) => acc + curr.quantity, 0)
+}
+
+async function removeFromCart(cocktailId) {
+  await api.delete(`/api/basket/remove/${cocktailId}`)
+  fetchCart()
+}
+
+// A appeler quand tu ajoutes au panier (dans ta page Menu)
+async function addToCart(cocktailId, quantity) {
+  await api.post('/api/basket/add', null, {
+    params: { cocktailId, quantity }
+  })
+  fetchCart()
+}
 
 
 
@@ -334,6 +426,7 @@ onMounted(() => {
   // Récupérer les informations de l'utilisateur depuis le store
   userType.value = getRoleLabel(authStore.userRole) || 'client'
   userEmail.value = authStore.userEmail || ''
+  fetchCart()
 })
 </script>
 
@@ -587,4 +680,93 @@ onMounted(() => {
 .nav-item:nth-child(3) { animation-delay: 0.3s; }
 .nav-item:nth-child(4) { animation-delay: 0.4s; }
 .nav-item:nth-child(5) { animation-delay: 0.5s; }
+
+.cart-popup-list {
+  min-width: 340px;
+  max-width: 96vw;
+  padding-bottom: 0;
+  border-radius: 16px;
+  box-shadow: 0 4px 32px 0 rgba(0,0,0,0.10);
+  max-height: 60vh;
+  overflow-y: auto;
+  background: white;
+}
+
+.cart-mini-list {
+  max-height: 230px;
+  overflow-y: auto;
+}
+
+.cart-line-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  min-height: 52px;
+  transition: background 0.13s;
+}
+
+.cart-line-item:hover {
+  background: rgba(245,158,11,0.06);
+}
+
+.cart-line-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  flex: 1 1 auto;
+  margin-left: 8px;
+  overflow: hidden;
+}
+
+.cart-line-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.cart-name {
+  max-width: 120px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.cart-size {
+  font-size: 0.93em;
+  color: #64748b;
+  font-weight: 400;
+}
+
+.cart-line-details {
+  display: flex;
+  gap: 8px;
+  font-size: 0.93em;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.cart-line-price {
+  min-width: 58px;
+  text-align: right;
+  font-size: 1.05rem;
+  color: #f59e0b;
+}
+
+@media (max-width: 600px) {
+  .cart-popup-list {
+    min-width: 85vw;
+    max-width: 98vw;
+    border-radius: 14px;
+    font-size: 0.97rem;
+  }
+  .cart-name {
+    max-width: 65vw;
+  }
+}
+
 </style>

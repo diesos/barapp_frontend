@@ -41,6 +41,17 @@ const routes: Array<RouteRecordRaw> = [
     path: '/admin/ingredients',
     name: 'IngredientManagement',
     component: () => import('../views/crud/Ingredient.vue'),
+  },
+  {
+    path: '/cart',
+    name: 'Cart',
+    component: () => import('../views/crud/Cart.vue'),
+  },
+  {
+    path: '/order/:orderId',
+    name: 'Order',
+    props: true,
+    component: () => import('../views/crud/Order.vue'),
   }
 ]
 

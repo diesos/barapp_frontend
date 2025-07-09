@@ -72,10 +72,18 @@
 import { ref, computed, onMounted } from 'vue'
 import CocktailCard from './CocktailCard.vue' // Assure-toi que ce composant existe
 import api from '../utils/axios'
+import { toast } from 'vue3-toastify'
+import { useBasketStore } from '../store/basket'
+
+
+const basketStore = useBasketStore()
+
 
 const cocktails = ref([])
 const categories = ref([]) // NOUVEAU: Pour stocker la hiérarchie des catégories
 const selectedCategoryId = ref('all') // NOUVEAU: On utilise l'ID pour la sélection
+
+
 
 // Fonction pour récupérer toutes les données nécessaires
 async function fetchData() {
@@ -92,6 +100,7 @@ async function fetchData() {
       // On garde l'objet catégorie entier, c'est plus robuste
       category: cocktail.category || { id: null, name: 'Sans catégorie' },
       sizes: cocktail.sizes.map(s => ({
+        id: s.id,
         name: s.size,
         price: s.price / 100
       })),
@@ -183,9 +192,39 @@ const getCategoryIcon = (categoryName) => {
 };
 
 // Gestionnaires d'événements (inchangés)
-function handleAddToCart(item) {
-  console.log('Ajout au panier :', item);
+async function handleAddToCart(item) {
+  try{
+    await basketStore.addToBasket(item.cocktailId, item.cocktailSizeId, item.quantity);
+  }
+  catch (error) {
+    console.error('Erreur lors de l\'ajout au panier :', error);
+    toast.error('Erreur lors de l\'ajout au panier', {
+      position: 'top-right',
+      autoClose: 2000,
+      hideProgressBar: true,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      progress: undefined
+    });
+    return;
+  } finally {
+  toast.success('Cocktail ajouté avec succès', {
+    autoClose: 1000
+
+  })}
+  await fetchCart()
+  }
+
+
+async function fetchCart() {
+  const { data } = await api.get('/api/basket')
+  basket.value = data
+  cartItems.value = data.basketLines
+  cartTotal.value = data.totalAmount // adapte selon ton modèle
+  cartCount.value = cartItems.value.reduce((acc, curr) => acc + curr.quantity, 0)
 }
+
 function handleToggleFavorite(data) {
   console.log('Toggle favori :', data);
 }

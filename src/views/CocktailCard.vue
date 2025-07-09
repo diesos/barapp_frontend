@@ -351,6 +351,8 @@ const addToCart = async () => {
   try {
     const cartItem = {
       cocktail: props.cocktail,
+      cocktailId: props.cocktail.id,
+      cocktailSizeId: getCurrentSize.value.id,
       size: getCurrentSize.value,
       quantity: quantity.value,
       totalPrice: getTotalPrice.value
