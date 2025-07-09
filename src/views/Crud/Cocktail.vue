@@ -273,6 +273,14 @@
                       :error-messages="errors.discountPrice"
                       class="mb-3"
                     />
+
+
+                    <v-text-field
+                      v-model="form.imageUrl"
+                      label="Url de l'image du cocktail"
+                      variant="outlined"
+                      class="mb-3"
+                    />
                   </v-col>
                 </v-row>
 
@@ -447,6 +455,7 @@ const form = reactive({
   isAvailable: true,
   isDiscount: false,
   discountPrice: 0,
+  imageUrl: null as string | null,
   sizes: [{ size: 'M', price: 0 }]
 })
 
@@ -455,7 +464,8 @@ const errors = reactive({
   price: '',
   categoryId: '',
   description: '',
-  discountPrice: ''
+  discountPrice: '',
+  imageUrl: ''
 })
 
 // Computed property for filtered cocktails
@@ -507,10 +517,24 @@ const fetchCocktails = async () => {
   }
 }
 
+function flattenCategories(categories, level = 0) {
+  return categories.reduce((acc, cat) => {
+    acc.push({
+      ...cat,
+      label: `${'— '.repeat(level)}${cat.name}`
+    });
+    if (cat.subcategories && cat.subcategories.length) {
+      acc = acc.concat(flattenCategories(cat.subcategories, level + 1));
+    }
+    return acc;
+  }, []);
+}
+
 const fetchCategories = async () => {
   try {
     const { data } = await api.get('/api/categories')
-    categories.value = data
+    categories.value = flattenCategories(data);
+    console.log('Catégories récupérées avec succès :', categories.value)
   } catch (error) {
     toast.error('Erreur lors du chargement des catégories')
   }
@@ -525,6 +549,8 @@ const changeColorBySize = (size: any) =>{
   }
   return colors[size] || 'primary'
 }
+
+
 
 const fetchRecipe = async (cocktailId: number) => {
   try {
@@ -556,6 +582,7 @@ const openDialog = async (item?: any) => {
     form.isVisible = item.isVisible
     form.isAvailable = item.isAvailable
     form.isDiscount = item.isDiscount
+    form.imageUrl = item.imageUrl || null
     form.discountPrice = item.discountPrice ? item.discountPrice / 100 : 0
 
     // Handle sizes
@@ -590,6 +617,7 @@ const resetForm = () => {
   form.categoryId = null
   form.isVisible = true
   form.isAvailable = true
+  form.imageUrl = null
   form.isDiscount = false
   form.discountPrice = 0
   form.sizes = [{ size: 'S', price: 0 }, { size: 'M', price: 0 }, { size: 'L', price: 0 }, { size: 'XL', price: 0 }]
@@ -627,7 +655,7 @@ const validateForm = () => {
 }
 
 const addSizeLine = () => {
-  const sizes = ['S', 'M', 'L', 'XL']
+  const sizes = ['S', 'M', 'L']
   const usedSizes = form.sizes.map(s => s.size)
   const availableSizes = sizes.filter(s => !usedSizes.includes(s))
 
@@ -654,11 +682,11 @@ const saveItem = async () => {
     const payload = {
       name: form.name.trim(),
       description: form.description.trim(),
-      // price: Math.round(form.price * 100), // Convert to cents
       categoryId: form.categoryId,
       isVisible: form.isVisible,
       isAvailable: form.isAvailable,
       isDiscount: form.isDiscount,
+      imageUrl: form.imageUrl || null,
       discountPrice: form.isDiscount ? Math.round(form.discountPrice * 100) : null,
       sizes: form.sizes.map(size => ({
         size: size.size,

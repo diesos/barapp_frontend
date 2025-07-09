@@ -8,11 +8,12 @@
         <!-- Filtres par catégorie -->
         <div class="category-filters">
           <v-chip-group
-            v-model="selectedCategory"
+            v-model="selectedCategoryId"
             filter
             color="primary"
             class="category-chips"
           >
+            <!-- Chip "Tous" -->
             <v-chip
               value="all"
               size="large"
@@ -23,16 +24,18 @@
               Tous ({{ cocktails.length }})
             </v-chip>
 
+            <!-- NOUVEAU: Itération sur la liste aplatie des catégories -->
             <v-chip
-              v-for="category in availableCategories"
+              v-for="category in flattenedCategories"
               :key="category.id"
               :value="category.id"
               size="large"
               variant="outlined"
               class="category-chip"
+              :class="{ 'parent-category': category.isParent }"
             >
               <v-icon start>{{ getCategoryIcon(category.name) }}</v-icon>
-              {{ category.name }} ({{ getCategoryCount(category.id) }})
+              {{ category.name }} ({{ getCategoryCount(category) }})
             </v-chip>
           </v-chip-group>
         </div>
@@ -67,100 +70,140 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import CocktailCard from './CocktailCard.vue'
+import CocktailCard from './CocktailCard.vue' // Assure-toi que ce composant existe
 import api from '../utils/axios'
 
 const cocktails = ref([])
-const selectedCategory = ref('all')
+const categories = ref([]) // NOUVEAU: Pour stocker la hiérarchie des catégories
+const selectedCategoryId = ref('all') // NOUVEAU: On utilise l'ID pour la sélection
 
-// Fonction pour récupérer les données
+// Fonction pour récupérer toutes les données nécessaires
 async function fetchData() {
   try {
-    const { data } = await api.get('/api/cocktails')
+    // On utilise Promise.all pour lancer les requêtes en parallèle
+    const [cocktailsResponse, categoriesResponse] = await Promise.all([
+      api.get('/api/cocktails'),
+      api.get('/api/categories') // NOUVEAU: Appel à l'API des catégories
+    ]);
 
-    // Transformer les données pour correspondre au format attendu par CocktailCard
-    cocktails.value = data.map(cocktail => ({
+    // Traitement des cocktails
+    cocktails.value = cocktailsResponse.data.map(cocktail => ({
       ...cocktail,
-      category: cocktail.category.name, // Extraire le nom de la catégorie
+      // On garde l'objet catégorie entier, c'est plus robuste
+      category: cocktail.category || { id: null, name: 'Sans catégorie' },
       sizes: cocktail.sizes.map(s => ({
         name: s.size,
-        price: s.price / 100 // Convertir en euros
+        price: s.price / 100
       })),
-      ingredients: cocktail.ingredients || [] // Ajouter un tableau vide si pas d'ingrédients
-    }))
+      ingredients: cocktail.ingredients || []
+    }));
 
-    console.log('Données récupérées avec succès :', cocktails.value)
+    // NOUVEAU: Stockage des catégories
+    categories.value = categoriesResponse.data;
+
+    console.log('Cocktails récupérés:', cocktails.value);
+    console.log('Catégories récupérées:', categories.value);
   } catch (error) {
-    console.error('Erreur lors de la récupération des données :', error)
+    console.error('Erreur lors de la récupération des données :', error);
   }
 }
 
-// Computed pour récupérer les catégories disponibles
-const availableCategories = computed(() => {
-  const categories = cocktails.value.reduce((acc, cocktail) => {
-    const categoryId = cocktail.category
-    if (!acc.find(cat => cat.id === categoryId)) {
-      acc.push({
-        id: categoryId,
-        name: categoryId
-      })
-    }
-    return acc
-  }, [])
+// NOUVEAU: Computed pour aplatir la liste des catégories pour les chips
+const flattenedCategories = computed(() => {
+  const flatList = [];
+  categories.value.forEach(parent => {
+    // Ajoute la catégorie parente
+    flatList.push({
+      id: parent.id,
+      name: parent.name,
+      isParent: true,
+      childIds: parent.subcategories.map(sub => sub.id)
+    });
+    // Ajoute ses sous-catégories
+    parent.subcategories.forEach(sub => {
+      flatList.push({
+        id: sub.id,
+        name: sub.name,
+        isParent: false
+      });
+    });
+  });
+  return flatList;
+});
 
-  return categories.sort((a, b) => a.name.localeCompare(b.name))
-})
-
-// Computed pour filtrer les cocktails
+// NOUVEAU: Logique de filtrage améliorée
 const filteredCocktails = computed(() => {
-  if (selectedCategory.value === 'all') {
-    return cocktails.value
+  if (selectedCategoryId.value === 'all' || !selectedCategoryId.value) {
+    return cocktails.value;
   }
 
+  // Trouve la catégorie sélectionnée dans notre liste aplatie
+ const selectedCategory = flattenedCategories.value.find(
+    c => String(c.id) === String(selectedCategoryId.value)
+  );
+
+  if (!selectedCategory) {
+    return cocktails.value; // Sécurité si la catégorie n'est pas trouvée
+  }
+  if (selectedCategory.isParent && selectedCategory.childIds?.length > 0) {
+ return cocktails.value.filter(cocktail =>
+    cocktail.category.id === selectedCategory.id ||
+    selectedCategory.childIds.includes(cocktail.category.id)
+  );
+  }
+  // Si c'est une feuille (catégorie sans enfants ou sous-catégorie)
   return cocktails.value.filter(cocktail =>
-    cocktail.category === selectedCategory.value
-  )
-})
+    cocktail.category.id === selectedCategory.id
+  );
+});
 
-// Fonction pour compter les cocktails par catégorie
-const getCategoryCount = (categoryId) => {
-  return cocktails.value.filter(cocktail => cocktail.category === categoryId).length
-}
+const getCategoryCount = (category) => {
+  if (category.isParent && category.childIds?.length > 0) {
+    // On compte tous les cocktails dont la catégorie est dans childIds
+    return cocktails.value.filter(c =>
+    c.category.id === category.id ||
+    category.childIds.includes(c.category.id)
+  ).length;
+  } else {
+    // Sinon, on compte ceux qui ont exactement cette catégorie
+    return cocktails.value.filter(c => c.category.id === category.id).length;
+  }
+};
 
-// Fonction pour obtenir l'icône de catégorie
+// Fonction pour obtenir l'icône de catégorie (inchangée)
 const getCategoryIcon = (categoryName) => {
   const icons = {
-    'Base Rhum': 'mdi-glass-cocktail',
-    'Base Whisky': 'mdi-glass-wine',
-    'Base Vodka': 'mdi-glass-flute',
-    'Base Gin': 'mdi-leaf',
-    'Sans Alcool': 'mdi-water',
-    'Tropical': 'mdi-palm-tree',
-    'Classique': 'mdi-diamond-stone',
-    'Signature': 'mdi-star',
-    'Digestif': 'mdi-glass-wine',
-    'Apéritif': 'mdi-glass-flute'
-  }
-  return icons[categoryName] || 'mdi-glass-cocktail'
-}
+    'Base Rhum': 'mdi-glass-cocktail', 'Cocktails Classiques': 'mdi-diamond-stone',
+    'Base Whisky': 'mdi-glass-wine', 'Cocktails Modernes': 'mdi-creation',
+    'Base Vodka': 'mdi-glass-flute', 'Cocktails Fruités': 'mdi-fruit-cherries',
+    'Base Gin': 'mdi-leaf', 'Cocktails Épicés': 'mdi-fire',
+    'Sans Alcool': 'mdi-water', 'Shots': 'mdi-glass-stange',
+  };
+  return icons[categoryName] || 'mdi-glass-cocktail';
+};
 
-// Gestionnaires d'événements
+// Gestionnaires d'événements (inchangés)
 function handleAddToCart(item) {
-  console.log('Ajout au panier :', item)
+  console.log('Ajout au panier :', item);
 }
-
 function handleToggleFavorite(data) {
-  console.log('Toggle favori :', data)
+  console.log('Toggle favori :', data);
 }
-
 function handleShowDetails(cocktail) {
-  console.log('Voir détails :', cocktail)
+  console.log('Voir détails :', cocktail);
 }
 
-onMounted(fetchData)
+onMounted(fetchData);
 </script>
 
+<!-- Le style est inchangé, comme demandé -->
 <style scoped>
+/* Ajout d'un style pour mieux voir les catégories parentes (optionnel) */
+.parent-category {
+  font-weight: 700 !important;
+  border-style: dashed !important;
+}
+
 .cocktail-app {
   min-height: 100vh;
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);

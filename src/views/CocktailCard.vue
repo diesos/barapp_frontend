@@ -9,7 +9,7 @@
     <div class="image-container">
       <div
         class="cocktail-image"
-        :style="{ background: !cocktail.imageUrl ? getCategoryGradient(cocktail.category) : 'transparent' }"
+        :style="{ background: !cocktail.imageUrl ? getCategoryGradient(cocktail.category.name) : 'transparent' }"
       >
         <!-- Image réelle du cocktail si disponible -->
         <img
@@ -23,7 +23,7 @@
         <!-- Icône de fallback -->
         <v-icon
           v-else
-          :icon="getCategoryIcon(cocktail.category)"
+          :icon="getCategoryIcon(cocktail.category.name)"
           size="80"
           color="white"
           class="cocktail-icon"
@@ -32,11 +32,10 @@
         <!-- Category Badge -->
         <v-chip
           class="category-chip"
-          :color="getCategoryColor(cocktail.category)"
           size="small"
           label
         >
-          {{ cocktail.category }}
+          {{ cocktail.category.name }}
         </v-chip>
 
         <!-- Favorite Button -->
@@ -199,7 +198,7 @@
           :disabled="disabled || !cocktail.isAvailable"
         >
           <v-icon start>mdi-cart-plus</v-icon>
-          Ajouter - {{ getTotalPrice.toFixed(2) }}€
+          Ajouter
         </v-btn>
       </div>
     </v-card-text>
@@ -374,6 +373,9 @@ const toggleFavorite = () => {
     cocktail: props.cocktail,
     isFavorite: isFavorite.value
   })
+  if (isFavorite.value) {
+    localStorage.setItem('favoriteCocktail', JSON.stringify(props.cocktail.id))
+  }
 }
 
 const showDetails = () => {
