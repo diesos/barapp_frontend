@@ -4,57 +4,45 @@
     <div class="filters-section">
       <div class="container">
         <h1 class="app-title">Nos Cocktails</h1>
-
+        <!-- Barre de recherche -->
+        <v-row class="justify-center">
+          <v-col cols="12" md="6" lg="4">
+            <v-text-field v-model="search" label="Rechercher un cocktail" prepend-inner-icon="mdi-magnify"
+              variant="outlined" clearable color="primary" hide-details density="comfortable" />
+          </v-col>
+        </v-row>
         <!-- Filtres par catégorie -->
         <div class="category-filters">
-          <v-chip-group
-            v-model="selectedCategoryId"
-            filter
-            color="primary"
-            class="category-chips"
-          >
+
+          <v-chip-group v-model="selectedCategoryId" filter color="primary" class="category-chips">
             <!-- Chip "Tous" -->
-            <v-chip
-              value="all"
-              size="large"
-              variant="outlined"
-              class="category-chip"
-            >
+            <v-chip value="all" size="large" variant="outlined" class="category-chip">
               <v-icon start>mdi-all-inclusive</v-icon>
               Tous ({{ cocktails.length }})
             </v-chip>
 
             <!-- NOUVEAU: Itération sur la liste aplatie des catégories -->
-            <v-chip
-              v-for="category in flattenedCategories"
-              :key="category.id"
-              :value="category.id"
-              size="large"
-              variant="outlined"
-              class="category-chip"
-              :class="{ 'parent-category': category.isParent }"
-            >
+            <v-chip v-for="category in flattenedCategories" :key="category.id" :value="category.id" size="large"
+              variant="outlined" class="category-chip" :class="{ 'parent-category': category.isParent }">
               <v-icon start>{{ getCategoryIcon(category.name) }}</v-icon>
               {{ category.name }} ({{ getCategoryCount(category) }})
             </v-chip>
           </v-chip-group>
+
         </div>
+
       </div>
     </div>
+
+
 
     <!-- Grille de cocktails -->
     <div class="cocktails-grid">
       <div class="container">
         <div class="grid">
-          <CocktailCard
-            v-for="cocktail in filteredCocktails"
-            :key="cocktail.id"
-            :cocktail="cocktail"
-            @add-to-cart="handleAddToCart"
-            @toggle-favorite="handleToggleFavorite"
-            @show-details="handleShowDetails"
-            :disabled="!cocktail.isAvailable"
-          />
+          <CocktailCard v-for="cocktail in filteredCocktails" :key="cocktail.id" :cocktail="cocktail"
+            @add-to-cart="handleAddToCart" @toggle-favorite="handleToggleFavorite" @show-details="handleShowDetails"
+            :disabled="!cocktail.isAvailable" />
         </div>
 
         <!-- Message si aucun cocktail -->
@@ -83,6 +71,7 @@ const cocktails = ref([])
 const categories = ref([]) // NOUVEAU: Pour stocker la hiérarchie des catégories
 const selectedCategoryId = ref('all') // NOUVEAU: On utilise l'ID pour la sélection
 
+const search = ref('');
 
 
 // Fonction pour récupérer toutes les données nécessaires
@@ -142,37 +131,49 @@ const flattenedCategories = computed(() => {
 
 // NOUVEAU: Logique de filtrage améliorée
 const filteredCocktails = computed(() => {
-  if (selectedCategoryId.value === 'all' || !selectedCategoryId.value) {
-    return cocktails.value;
+  // Filtre catégorie comme avant
+  let list = cocktails.value;
+  if (selectedCategoryId.value !== 'all' && selectedCategoryId.value) {
+    const selectedCategory = flattenedCategories.value.find(
+      c => String(c.id) === String(selectedCategoryId.value)
+    );
+    if (selectedCategory) {
+      if (selectedCategory.isParent && selectedCategory.childIds?.length > 0) {
+        list = list.filter(cocktail =>
+          cocktail.category.id === selectedCategory.id ||
+          selectedCategory.childIds.includes(cocktail.category.id)
+        );
+      } else {
+        list = list.filter(cocktail => cocktail.category.id === selectedCategory.id);
+      }
+    }
   }
 
-  // Trouve la catégorie sélectionnée dans notre liste aplatie
- const selectedCategory = flattenedCategories.value.find(
-    c => String(c.id) === String(selectedCategoryId.value)
-  );
+  // Filtre recherche (nom ou ingrédients)
+  if (search.value && search.value.trim() !== '') {
+    const query = search.value.trim().toLowerCase();
+    list = list.filter(cocktail => {
+      // Cherche dans le nom et dans les ingrédients (optionnel)
+      const inName = cocktail.name.toLowerCase().includes(query);
+      const inIngredients = cocktail.ingredients.some(ing =>
+        ing.name?.toLowerCase().includes(query)
+      );
+      return inName || inIngredients;
+    });
+  }
 
-  if (!selectedCategory) {
-    return cocktails.value; // Sécurité si la catégorie n'est pas trouvée
-  }
-  if (selectedCategory.isParent && selectedCategory.childIds?.length > 0) {
- return cocktails.value.filter(cocktail =>
-    cocktail.category.id === selectedCategory.id ||
-    selectedCategory.childIds.includes(cocktail.category.id)
-  );
-  }
-  // Si c'est une feuille (catégorie sans enfants ou sous-catégorie)
-  return cocktails.value.filter(cocktail =>
-    cocktail.category.id === selectedCategory.id
-  );
+  return list;
 });
+
+
 
 const getCategoryCount = (category) => {
   if (category.isParent && category.childIds?.length > 0) {
     // On compte tous les cocktails dont la catégorie est dans childIds
     return cocktails.value.filter(c =>
-    c.category.id === category.id ||
-    category.childIds.includes(c.category.id)
-  ).length;
+      c.category.id === category.id ||
+      category.childIds.includes(c.category.id)
+    ).length;
   } else {
     // Sinon, on compte ceux qui ont exactement cette catégorie
     return cocktails.value.filter(c => c.category.id === category.id).length;
@@ -193,7 +194,7 @@ const getCategoryIcon = (categoryName) => {
 
 // Gestionnaires d'événements (inchangés)
 async function handleAddToCart(item) {
-  try{
+  try {
     await basketStore.addToBasket(item.cocktailId, item.cocktailSizeId, item.quantity);
   }
   catch (error) {
@@ -211,12 +212,13 @@ async function handleAddToCart(item) {
   } finally {
 
 
-      toast.success("Cocktail ajouté avec succès!", {
-        position: "top-center",
-        autoClose: 1000,
-        })}
-  await fetchCart()
+    toast.success(`Cocktail ajouté avec succès! `, {
+      position: "top-center",
+      autoClose: 1000,
+    })
   }
+  await fetchCart()
+}
 
 
 async function fetchCart() {

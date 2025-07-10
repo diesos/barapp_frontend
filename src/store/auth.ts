@@ -120,7 +120,7 @@ export const useAuthStore = defineStore('auth', {
           } else {
             // Redirection par défaut selon le rôle
             if (this.isBarmaker || this.isAdmin) {
-              router.push('/orders-management')
+              router.push('/menu')
             } else {
               router.push('/menu')
             }

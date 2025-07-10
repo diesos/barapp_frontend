@@ -209,6 +209,9 @@ const formatDate = (date: string | Date) => {
 
 onMounted(() => {
   fetchOrders()
+  if (!authStore.isAuthenticated) {
+    router.push('/login')
+  }
 })
 </script>
 

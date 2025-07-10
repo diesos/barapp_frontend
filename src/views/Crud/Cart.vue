@@ -293,6 +293,7 @@ const getConfettiStyle = (n: number) => {
 
 /* Success States */
 .success-section {
+  margin-top: 2rem;
   display: flex;
   flex-direction: column;
   align-items: center;

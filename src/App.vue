@@ -1,5 +1,5 @@
 <template>
-  <v-app>
+  <v-app class="hide-sidebar">
     <!-- Loading overlay -->
     <v-overlay v-model="loading" class="loading-overlay">
       <v-progress-circular
@@ -191,12 +191,13 @@
             class="user-menu-btn"
           >
             <v-avatar size="40" color="primary">
-              <v-icon>mdi-account</v-icon>
+                <v-icon v-if="!authStore.isAuthenticated" @click="$router.push('/login')">mdi-account</v-icon>
+                <v-icon v-else >mdi-account</v-icon>
             </v-avatar>
           </v-btn>
         </template>
 
-        <v-list class="user-menu">
+        <v-list class="user-menu" v-if="authStore.isAuthenticated">
           <v-list-item>
             <v-list-item-title>{{ userEmail }}</v-list-item-title>
             <v-list-item-subtitle>
@@ -208,13 +209,13 @@
                       </v-chip></v-list-item-subtitle>
           </v-list-item>
           <v-divider />
-          <v-list-item @click="$router.push('/profile')">
+          <v-list-item v-if="authStore.isAuthenticated" @click="$router.push('/profile')">
             <template #prepend>
               <v-icon>mdi-account-circle</v-icon>
             </template>
             <v-list-item-title>Profil</v-list-item-title>
           </v-list-item>
-          <v-list-item @click="logout">
+          <v-list-item v-if="authStore.isAuthenticated"  @click="logout">
             <template #prepend>
               <v-icon>mdi-logout</v-icon>
             </template>
@@ -277,7 +278,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuthStore } from './store/auth'
@@ -352,7 +353,6 @@ const baseMenuItems = [
 // Items UNIQUEMENT pour les administrateurs
 const adminOnlyMenuItems = [
     { title: 'Commandes en cours', value: 'orders-management', icon: 'mdi-clipboard-list', to: '/admin/orders' },
-    { title: 'Gestion Carte', value: 'menu-management', icon: 'mdi-cog', to: '/admin/menu' },
     { title: 'Gestion Categories', value: 'categorie-management', icon: 'mdi-shape-plus', to: '/admin/categories' },
     { title: 'Gestion Cocktails', value: 'cocktail-management', icon: 'mdi-glass-pint-outline', to: '/admin/cocktails' },
     { title: 'Gestion Recettes', value: 'recipe-management', icon: 'mdi-notebook-edit', to: '/admin/recipes' },
@@ -386,7 +386,13 @@ const displayedMenuItems = computed(() => {
 // Methods
 const logout = () => {
   // Logique de déconnexion
-  router.push('/login')
+  authStore.logout()
+  toast.success('Déconnexion réussie ! À bientôt 🍹',
+    {duration: 1000, position: 'top-center', icon: 'mdi-check-circle' }
+  )
+  setTimeout(() => {
+    router.push('/login')
+  }, 1000)
 }
 
 const showSnackbar = (message, color = 'success') => {
@@ -415,7 +421,7 @@ const getRoleLabel = (role) => {
     case 'ROLE_ADMIN': return 'Administrateur'
     case 'ROLE_BARMAKER': return 'Barmaker'
     case 'ROLE_USER': return 'Client'
-    default: return 'Inconnu'
+    default: return 'Déconnecté'
   }
 }
 
@@ -428,6 +434,18 @@ onMounted(() => {
   userType.value = getRoleLabel(authStore.userRole) || 'client'
   userEmail.value = authStore.userEmail || ''
   fetchCart()
+})
+
+watch(() => authStore.isAuthenticated, (isAuthenticated) => {
+  if (!isAuthenticated) {
+    router.push('/login')
+    userType.value = 'Déconnecté'
+    userEmail.value = ''
+  } else {
+    userType.value = getRoleLabel(authStore.userRole) || 'client'
+    userEmail.value = authStore.userEmail || ''
+    fetchCart()
+  }
 })
 </script>
 

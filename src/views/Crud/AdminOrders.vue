@@ -112,51 +112,51 @@
     </div>
 
     <!-- Modal de confirmation pour terminer -->
-    <v-dialog v-model="confirmDialog" width="400" persistent>
-      <v-card class="confirm-card">
-        <v-card-title class="text-center pa-6">
-          <v-icon size="48" color="success" class="mb-3">mdi-check-circle</v-icon>
-          <div class="confirm-title">Confirmer la préparation</div>
-        </v-card-title>
-        <v-card-text class="text-center pb-2">
-          <div class="confirm-text">
-            Êtes-vous sûr que la commande <strong>#{{ selectedOrder?.id }}</strong> est prête ?
-          </div>
-          <div class="confirm-items mt-3">
-            <v-chip
-              v-for="item in selectedOrder?.orderLines || []"
-              :key="item.id"
-              size="small"
-              variant="outlined"
-              class="ma-1"
-            >
-              {{ item.cocktail?.name }} x{{ item.quantity }}
-            </v-chip>
-          </div>
-        </v-card-text>
-        <v-card-actions class="pa-4">
-          <v-btn
-            color="grey"
-            variant="outlined"
-            block
-            @click="confirmDialog = false"
-            class="mb-2"
-          >
-            Annuler
-          </v-btn>
-          <v-btn
-            color="success"
-            variant="flat"
-            block
-            @click="confirmProgressStatus"
-            :loading="isProgressing"
-          >
-            <v-icon class="mr-2">mdi-check-bold</v-icon>
-            Confirmer
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+<v-dialog v-model="confirmDialog" width="400" persistent>
+  <v-card class="confirm-card">
+    <v-card-title class="text-center pa-6">
+      <v-icon size="48" color="success" class="mb-3">mdi-check-circle</v-icon>
+      <div class="confirm-title">Confirmer la préparation</div>
+    </v-card-title>
+    <v-card-text class="text-center pb-2">
+      <div class="confirm-text">
+        Êtes-vous sûr que la commande <strong>#{{ selectedOrder?.id }}</strong> est prête ?
+      </div>
+      <div class="confirm-items mt-3">
+        <v-chip
+          v-for="item in selectedOrder?.orderLines || []"
+          :key="item.id"
+          size="small"
+          variant="outlined"
+          class="ma-1"
+        >
+          {{ item.cocktail?.name }} ({{ item.cocktailSize?.size }}) x{{ item.quantity }}
+        </v-chip>
+      </div>
+    </v-card-text>
+    <v-card-actions class="pa-4 justify-center gap-4 flex-column">
+      <v-btn
+        color="success"
+        variant="flat"
+        block
+        class="mb-2"
+        @click="confirmProgressStatus"
+        :loading="isProgressing"
+      >
+        <v-icon class="mr-2">mdi-check-bold</v-icon>
+        Confirmer
+      </v-btn>
+      <v-btn
+        color="grey"
+        variant="outlined"
+        block
+        @click="confirmDialog = false"
+      >
+        Annuler
+      </v-btn>
+    </v-card-actions>
+  </v-card>
+</v-dialog>
 
     <!-- Modal détails complets -->
     <v-dialog v-model="detailsDialog" width="500" persistent>
@@ -480,12 +480,18 @@ function toggleFullscreen() {
   if (isFullscreen.value) {
     const elem = document.documentElement
     if (elem.requestFullscreen) elem.requestFullscreen()
+    // Ajoute la classe hide-sidebar sur <body> et sur .v-application
     document.body.classList.add('hide-sidebar')
+    const appRoot = document.querySelector('.v-application')
+    if (appRoot) appRoot.classList.add('hide-sidebar')
   } else {
     if (document.exitFullscreen) document.exitFullscreen()
     document.body.classList.remove('hide-sidebar')
+    const appRoot = document.querySelector('.v-application')
+    if (appRoot) appRoot.classList.remove('hide-sidebar')
   }
 }
+
 
 onMounted(() => {
   setupFetchers()
@@ -504,6 +510,7 @@ onUnmounted(() => {
   padding: 24px 16px;
   min-height: 100vh;
 }
+
 
 .order-board-title {
   font-size: 2.4rem;
@@ -1002,5 +1009,19 @@ body.hide-sidebar header {
 
 .toast-error {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+body.hide-sidebar .v-navigation-drawer,
+body.hide-sidebar .v-app-bar,
+body.hide-sidebar .v-toolbar,
+body.hide-sidebar .sidebar,
+body.hide-sidebar nav,
+body.hide-sidebar header,
+.v-application.hide-sidebar .v-navigation-drawer,
+.v-application.hide-sidebar .v-app-bar,
+.v-application.hide-sidebar .v-toolbar,
+.v-application.hide-sidebar .sidebar,
+.v-application.hide-sidebar nav,
+.v-application.hide-sidebar header {
+  display: none !important;
 }
 </style>

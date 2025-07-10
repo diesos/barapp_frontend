@@ -533,9 +533,9 @@ async function openCancelDialog(order: Order) {
   setTimeout(async () => {
     try {
       // Utilisation du endpoint backend pour status à jour
-      const res = await api.get('/api/orders/status/ORDERED')
-      const found = res.data.find((o: Order) => o.id === order.id)
-      if (found) {
+      const res = await api.get('/api/orders/' + order.id)
+
+      if (res.data.status === 'ORDERED') {
         cancelCheckResult.value = { canBeCancelled: true }
       } else {
         cancelCheckResult.value = { canBeCancelled: false, reason: "La commande n'est plus annulable (déjà en cours ou terminée)." }
