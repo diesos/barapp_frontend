@@ -1,106 +1,236 @@
 <template>
-  <v-container class="order-board">
-    <h1 class="order-board-title mb-8">Gestion des commandes</h1>
-    <v-row class="status-columns" dense>
-      <v-col
+  <v-container class="order-board" :class="{ fullscreen: isFullscreen }">
+    <div class="order-board-header">
+      <h1 class="order-board-title mb-4">🍹 Gestion des Commandes</h1>
+      <v-btn class="fullscreen-btn" icon color="primary" @click="toggleFullscreen">
+        <v-icon v-if="!isFullscreen">mdi-arrow-expand-all</v-icon>
+        <v-icon v-else>mdi-arrow-collapse-all</v-icon>
+      </v-btn>
+    </div>
+
+    <div class="status-columns-flex">
+      <div
         v-for="status in STATUSES"
         :key="status.key"
-        cols="12"
-        sm="4"
-        class="status-column"
+        class="status-column-flex"
       >
-        <v-card class="status-card" :class="status.key" elevation="5">
+        <v-card class="status-card" :class="status.key" elevation="8">
           <div class="status-header">
-            <v-icon :class="['status-icon', status.key, { pulse: status.pulse }]" size="38">
+            <v-icon :class="['status-icon', status.key, { pulse: status.pulse }]" size="42">
               {{ status.icon }}
             </v-icon>
-            <span class="status-title">{{ status.label }}</span>
-          </div>
-          <v-divider class="mb-2"></v-divider>
-          <transition-group name="order-list" tag="div" class="order-list">
-            <v-card
-              v-for="order in status.orders"
-              :key="order.id"
-              class="order-card"
-              elevation="2"
-              @click="selectOrder(order, status)"
-            >
-              <v-card-title>
-                <span class="order-number">#{{ order.id }}</span>
-                <span class="order-amount">{{ formatPrice(order.totalAmount) }}</span>
-              </v-card-title>
-              <v-card-text class="order-items-preview">
-                <v-chip
-                  v-for="item in order.orderLines"
-                  :key="item.id"
-                  class="mr-1 mb-1"
-                  variant="outlined"
-                  size="small"
-                  color="primary"
-                >
-                  {{ item.cocktail?.name }} x{{ item.quantity }}
-                </v-chip>
-              </v-card-text>
-              <v-card-subtitle class="order-date">{{ formatDate(order.createdAt) }}</v-card-subtitle>
-            </v-card>
-          </transition-group>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <!-- Drawer pour changer statut -->
-    <v-dialog v-model="drawer" width="420" persistent>
-      <v-card>
-        <v-card-title>
-          <v-icon color="primary" class="mr-2">mdi-clipboard-list-outline</v-icon>
-          <span>Détail de la commande #{{ selectedOrder?.id }}</span>
-          <v-spacer />
-          <v-btn icon @click="drawer = false"><v-icon>mdi-close</v-icon></v-btn>
-        </v-card-title>
-        <v-card-text>
-          <v-row>
-            <v-col cols="6"><strong>Date :</strong> {{ formatDate(selectedOrder?.createdAt) }}</v-col>
-            <v-col cols="6" class="text-right">
-              <v-chip :color="getStatusColor(selectedOrder?.status)">
-                {{ getStatusLabel(selectedOrder?.status) }}
+            <div class="status-info">
+              <span class="status-title">{{ status.label }}</span>
+              <v-chip
+                size="small"
+                :color="status.color"
+                variant="tonal"
+                class="count-chip"
+              >
+                {{ status.orders.length }}
               </v-chip>
-            </v-col>
-          </v-row>
-          <v-divider class="my-2" />
-          <h4 class="mb-2">Articles</h4>
-          <div v-for="item in selectedOrder?.orderLines || []" :key="item.id" class="order-item-detail mb-2">
-            <v-row align="center">
-              <v-col cols="1" class="py-0">
-                <v-icon color="primary">mdi-glass-cocktail</v-icon>
+            </div>
+          </div>
+          <v-divider class="mb-3"></v-divider>
+
+          <div class="order-list">
+            <template v-if="status.orders.length > 0">
+              <transition-group name="order-list" tag="div">
+                <div
+                  v-for="order in status.orders"
+                  :key="order.id"
+                  class="mcdo-order-card"
+                  :class="{ 'can-progress': canProgressStatus(order.status) }"
+                  @click="handleOrderClick(order)"
+                >
+                  <!-- Header avec numéro et montant -->
+                  <div class="order-header">
+                    <div class="order-number-badge">
+                      <v-icon size="16" class="mr-1">mdi-receipt</v-icon>
+                      #{{ order.id }}
+                    </div>
+                    <div class="order-amount">{{ formatPrice(order.totalAmount) }}</div>
+                  </div>
+
+                  <!-- Liste des items -->
+                  <div class="order-items">
+                    <div
+                      v-for="(item, index) in order.orderLines"
+                      :key="item.id"
+                      class="order-item"
+                    >
+                      <div class="item-info">
+                        <span class="item-name">{{ item.cocktail?.name }}</span>
+                        <span class="item-size">{{ item.cocktailSize?.size }}</span>
+                      </div>
+                      <div class="item-quantity">x{{ item.quantity }}</div>
+                    </div>
+                  </div>
+
+                  <!-- Footer avec heure et action -->
+                  <div class="order-footer">
+                    <div class="order-time">
+                      <v-icon size="14" class="mr-1">mdi-clock-outline</v-icon>
+                      {{ formatTime(order.createdAt) }}
+                    </div>
+                    <v-btn
+                      v-if="canProgressStatus(order.status)"
+                      :color="getNextStatusColor(order.status)"
+                      size="small"
+                      variant="flat"
+                      class="action-btn"
+                      @click.stop="quickProgressStatus(order)"
+                    >
+                      <v-icon size="16" class="mr-1">{{ getNextStatusIcon(order.status) }}</v-icon>
+                      {{ getNextStatusAction(order.status) }}
+                    </v-btn>
+                    <v-chip
+                      v-else
+                      size="small"
+                      color="success"
+                      variant="tonal"
+                    >
+                      <v-icon size="14" class="mr-1">mdi-check</v-icon>
+                      Terminé
+                    </v-chip>
+                  </div>
+
+                  <!-- Indicateur de progression -->
+                  <div class="progress-indicator" :class="status.key"></div>
+                </div>
+              </transition-group>
+            </template>
+            <template v-else>
+              <div class="empty-state">
+                <v-icon size="64" color="grey-lighten-2" class="mb-3">{{ status.emptyIcon }}</v-icon>
+                <div class="empty-text">{{ status.emptyText }}</div>
+              </div>
+            </template>
+          </div>
+        </v-card>
+      </div>
+    </div>
+
+    <!-- Modal de confirmation pour terminer -->
+    <v-dialog v-model="confirmDialog" width="400" persistent>
+      <v-card class="confirm-card">
+        <v-card-title class="text-center pa-6">
+          <v-icon size="48" color="success" class="mb-3">mdi-check-circle</v-icon>
+          <div class="confirm-title">Confirmer la préparation</div>
+        </v-card-title>
+        <v-card-text class="text-center pb-2">
+          <div class="confirm-text">
+            Êtes-vous sûr que la commande <strong>#{{ selectedOrder?.id }}</strong> est prête ?
+          </div>
+          <div class="confirm-items mt-3">
+            <v-chip
+              v-for="item in selectedOrder?.orderLines || []"
+              :key="item.id"
+              size="small"
+              variant="outlined"
+              class="ma-1"
+            >
+              {{ item.cocktail?.name }} x{{ item.quantity }}
+            </v-chip>
+          </div>
+        </v-card-text>
+        <v-card-actions class="pa-4">
+          <v-btn
+            color="grey"
+            variant="outlined"
+            block
+            @click="confirmDialog = false"
+            class="mb-2"
+          >
+            Annuler
+          </v-btn>
+          <v-btn
+            color="success"
+            variant="flat"
+            block
+            @click="confirmProgressStatus"
+            :loading="isProgressing"
+          >
+            <v-icon class="mr-2">mdi-check-bold</v-icon>
+            Confirmer
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Modal détails complets -->
+    <v-dialog v-model="detailsDialog" width="500" persistent>
+      <v-card class="details-card">
+        <v-card-title class="details-header">
+          <v-icon color="primary" class="mr-2">mdi-clipboard-list-outline</v-icon>
+          <span>Commande #{{ selectedOrder?.id }}</span>
+          <v-spacer />
+          <v-btn icon @click="detailsDialog = false">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-card-title>
+
+        <v-card-text class="pa-4">
+          <div class="details-summary mb-4">
+            <v-row>
+              <v-col cols="6">
+                <div class="detail-label">Date</div>
+                <div class="detail-value">{{ formatDate(selectedOrder?.createdAt) }}</div>
               </v-col>
-              <v-col cols="8" class="py-0">
-                <div>{{ item.cocktail?.name }} <span class="text-grey text-caption">(x{{ item.quantity }})</span></div>
-                <div class="text-caption text-grey">Taille: {{ item.cocktailSize?.size }}</div>
-              </v-col>
-              <v-col cols="3" class="py-0 text-right">
-                <span>{{ formatPrice(item.totalSum) }}</span>
+              <v-col cols="6" class="text-right">
+                <div class="detail-label">Statut</div>
+                <v-chip :color="getStatusColor(selectedOrder?.status)" variant="tonal">
+                  {{ getStatusLabel(selectedOrder?.status) }}
+                </v-chip>
               </v-col>
             </v-row>
           </div>
-          <v-divider class="my-2" />
-          <div class="text-right">
-            <strong>Total :</strong> {{ formatPrice(selectedOrder?.totalAmount) }}
+
+          <v-divider class="mb-4"></v-divider>
+
+          <div class="details-items">
+            <h4 class="mb-3">Articles commandés</h4>
+            <div v-for="item in selectedOrder?.orderLines || []" :key="item.id" class="detail-item">
+              <v-row align="center" class="ma-0">
+                <v-col cols="1" class="pa-1">
+                  <v-avatar size="32" color="primary" variant="tonal">
+                    <v-icon size="16">mdi-glass-cocktail</v-icon>
+                  </v-avatar>
+                </v-col>
+                <v-col cols="7" class="pa-1">
+                  <div class="item-detail-name">{{ item.cocktail?.name }}</div>
+                  <div class="item-detail-size">Taille: {{ item.cocktailSize?.size }}</div>
+                </v-col>
+                <v-col cols="2" class="pa-1 text-center">
+                  <div class="item-detail-qty">x{{ item.quantity }}</div>
+                </v-col>
+                <v-col cols="2" class="pa-1 text-right">
+                  <div class="item-detail-price">{{ formatPrice(item.totalSum) }}</div>
+                </v-col>
+              </v-row>
+            </div>
+          </div>
+
+          <v-divider class="my-4"></v-divider>
+
+          <div class="details-total">
+            <v-row>
+              <v-col cols="8">
+                <div class="total-label">Total</div>
+              </v-col>
+              <v-col cols="4" class="text-right">
+                <div class="total-amount">{{ formatPrice(selectedOrder?.totalAmount) }}</div>
+              </v-col>
+            </v-row>
           </div>
         </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn v-if="selectedOrder && canProgressStatus(selectedOrder.status)" color="success" @click="progressStatus(selectedOrder)">
-            <v-icon left>mdi-arrow-right-bold</v-icon>
-            {{ getNextStatusLabel(selectedOrder.status) }}
-          </v-btn>
-          <v-btn text color="grey" @click="drawer = false">Fermer</v-btn>
-        </v-card-actions>
       </v-card>
     </v-dialog>
   </v-container>
 </template>
+
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, reactive } from 'vue'
 import api from '../../utils/axios'
 import { toast } from 'vue3-toastify'
 
@@ -120,25 +250,28 @@ interface Order {
   orderLines: OrderLine[]
 }
 
-// --- Statuts configurables
-const STATUSES = [
+const STATUSES = reactive([
   {
     key: 'ORDERED',
-    label: 'Commandées',
+    label: 'Nouvelles Commandes',
     icon: 'mdi-cart-arrow-down',
-    color: 'amber',
+    color: 'orange',
     pulse: true,
     apiStatus: 'ORDERED',
-    orders: ref<Order[]>([])
+    orders: [] as Order[],
+    emptyIcon: 'mdi-cart-outline',
+    emptyText: 'Aucune nouvelle commande'
   },
   {
     key: 'IN_PROGRESS',
-    label: 'En préparation',
+    label: 'En Préparation',
     icon: 'mdi-chef-hat',
     color: 'blue',
     pulse: true,
     apiStatus: 'IN_PROGRESS',
-    orders: ref<Order[]>([])
+    orders: [] as Order[],
+    emptyIcon: 'mdi-chef-hat',
+    emptyText: 'Aucune commande en cours'
   },
   {
     key: 'COMPLETED',
@@ -147,39 +280,149 @@ const STATUSES = [
     color: 'green',
     pulse: false,
     apiStatus: 'COMPLETED',
-    orders: ref<Order[]>([])
+    orders: [] as Order[],
+    emptyIcon: 'mdi-check-circle-outline',
+    emptyText: 'Aucune commande terminée'
   }
-]
+])
 
-// --- Etat drawer & sélection
-const drawer = ref(false)
+const detailsDialog = ref(false)
+const confirmDialog = ref(false)
 const selectedOrder = ref<Order | null>(null)
-const selectedStatus = ref<typeof STATUSES[0] | null>(null)
-
-// --- Intervalles refresh pour chaque status
+const isProgressing = ref(false)
+const isFullscreen = ref(false)
 const refreshIntervals: any[] = []
 
-function fetchOrdersForStatus(statusKey: string, ordersRef: any) {
-  api.get(`/api/orders/status/${statusKey}`)
-    .then(res => { ordersRef.value = res.data })
-    .catch(() => { ordersRef.value = [] })
+function fetchOrdersForStatus(statusObj: typeof STATUSES[0]) {
+  api.get(`/api/orders/status/${statusObj.apiStatus}`)
+    .then(res => {
+      const valid = Array.isArray(res.data)
+        ? res.data.filter(order => order && order.id)
+        : []
+      statusObj.orders.splice(0, statusObj.orders.length, ...valid)
+    })
+    .catch(error => {
+      console.error(`Error fetching orders for ${statusObj.apiStatus}:`, error)
+      statusObj.orders.splice(0, statusObj.orders.length)
+    })
 }
 
-// --- Refresh toutes les 3s chaque colonne, sans perdre les icônes
 function setupFetchers() {
   STATUSES.forEach(status => {
-    fetchOrdersForStatus(status.apiStatus, status.orders)
+    fetchOrdersForStatus(status)
     const interval = setInterval(() => {
-      fetchOrdersForStatus(status.apiStatus, status.orders)
-    }, 3000)
+      fetchOrdersForStatus(status)
+    }, 5000) // Refresh toutes les 5 secondes
     refreshIntervals.push(interval)
   })
 }
+
 function cleanupFetchers() {
   refreshIntervals.forEach(clearInterval)
+  refreshIntervals.splice(0, refreshIntervals.length)
 }
 
-// --- Affichage status/format UX
+// Actions pour gérer les clicks
+function handleOrderClick(order: Order) {
+  selectedOrder.value = order
+  detailsDialog.value = true
+}
+
+function quickProgressStatus(order: Order) {
+  selectedOrder.value = order
+
+  if (order.status === 'ORDERED') {
+    // Passage direct à "En préparation"
+    progressToNextStatus(order)
+  } else if (order.status === 'IN_PROGRESS') {
+    // Demander confirmation pour terminer
+    confirmDialog.value = true
+  }
+}
+
+function confirmProgressStatus() {
+  if (selectedOrder.value) {
+    progressToNextStatus(selectedOrder.value)
+  }
+}
+
+async function progressToNextStatus(order: Order) {
+  isProgressing.value = true
+
+  try {
+    let endpoint = ''
+    if (order.status === 'ORDERED') {
+      endpoint = `/api/orders/${order.id}/start`
+    } else if (order.status === 'IN_PROGRESS') {
+      endpoint = `/api/orders/${order.id}/complete`
+    }
+
+    await api.patch(endpoint)
+
+    // Refresh les colonnes impactées
+    const oldStatusObj = STATUSES.find(s => s.apiStatus === order.status)
+    const newStatus = getNextStatus(order.status)
+    const newStatusObj = STATUSES.find(s => s.apiStatus === newStatus)
+
+    if (oldStatusObj) fetchOrdersForStatus(oldStatusObj)
+    if (newStatusObj) fetchOrdersForStatus(newStatusObj)
+
+    // Notifications et sons
+    playSuccessSound()
+
+    if (order.status === 'ORDERED') {
+      toast.success('Commande mise en préparation ! 👨‍🍳', {
+        position: 'top-center',
+        autoClose: 2000
+      })
+    } else {
+      toast.success('Commande terminée ! 🎉', {
+        position: 'top-center',
+        autoClose: 2000
+      })
+    }
+
+    // Fermer les modals
+    confirmDialog.value = false
+    detailsDialog.value = false
+
+  } catch (error) {
+    console.error('Error updating order status:', error)
+    toast.error('Erreur lors du changement de statut', { position: 'top-center' })
+  } finally {
+    isProgressing.value = false
+  }
+}
+
+// Utilitaires pour les statuts
+function getNextStatus(status: string): string | null {
+  if (status === 'ORDERED') return 'IN_PROGRESS'
+  if (status === 'IN_PROGRESS') return 'COMPLETED'
+  return null
+}
+
+function canProgressStatus(status: string) {
+  return getNextStatus(status) !== null
+}
+
+function getNextStatusAction(status: string) {
+  if (status === 'ORDERED') return 'Préparer'
+  if (status === 'IN_PROGRESS') return 'Terminer'
+  return ''
+}
+
+function getNextStatusIcon(status: string) {
+  if (status === 'ORDERED') return 'mdi-chef-hat'
+  if (status === 'IN_PROGRESS') return 'mdi-check-bold'
+  return 'mdi-help'
+}
+
+function getNextStatusColor(status: string) {
+  if (status === 'ORDERED') return 'primary'
+  if (status === 'IN_PROGRESS') return 'success'
+  return 'grey'
+}
+
 function getStatusLabel(status?: string) {
   const map: Record<string, string> = {
     'ORDERED': 'Commandée',
@@ -188,29 +431,17 @@ function getStatusLabel(status?: string) {
   }
   return map[status ?? ''] ?? status
 }
-function getNextStatus(status?: string): string | null {
-  if (status === 'ORDERED') return 'IN_PROGRESS'
-  if (status === 'IN_PROGRESS') return 'COMPLETED'
-  return null
-}
-function getNextStatusLabel(status?: string): string | null {
-  const map: Record<string, string> = {
-    'ORDERED': 'Passer en préparation',
-    'IN_PROGRESS': 'Marquer comme terminée'
-  }
-  return map[status ?? ''] ?? null
-}
-function canProgressStatus(status?: string) {
-  return getNextStatus(status) !== null
-}
+
 function getStatusColor(status?: string) {
   const map: Record<string, string> = {
-    'ORDERED': 'amber',
+    'ORDERED': 'orange',
     'IN_PROGRESS': 'blue',
     'COMPLETED': 'green'
   }
   return map[status ?? ''] ?? 'grey'
 }
+
+// Utilitaires de formatage
 function formatDate(dateStr?: string) {
   if (!dateStr) return ''
   const d = new Date(dateStr)
@@ -219,235 +450,557 @@ function formatDate(dateStr?: string) {
     hour: '2-digit', minute: '2-digit'
   })
 }
+
+function formatTime(dateStr?: string) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  return d.toLocaleTimeString('fr-FR', {
+    hour: '2-digit', minute: '2-digit'
+  })
+}
+
 function formatPrice(amount: number | undefined) {
   return amount === undefined
     ? ''
-    : `${amount.toFixed(2)} €`
+    : `${(amount / 100).toFixed(2)} €`
 }
 
-// --- Sélection commande (ouvre drawer)
-function selectOrder(order: Order, statusObj: typeof STATUSES[0]) {
-  selectedOrder.value = order
-  selectedStatus.value = statusObj
-  drawer.value = true
-}
-
-// --- Son Apple Pay-style (mini mp3 embedded)
 function playSuccessSound() {
-  const audio = new Audio(
-    'https://cdn.jsdelivr.net/gh/bastify/public@main/applepay.mp3'
-  )
-  audio.volume = 0.2
-  audio.play()
-}
-
-// --- Action progression statut
-async function progressStatus(order: Order) {
-  const nextStatus = getNextStatus(order.status)
-  if (!nextStatus) return
-
   try {
-    // PATCH (en fonction du statut courant)
-    let endpoint = ''
-    if (nextStatus === 'IN_PROGRESS')
-      endpoint = `/api/orders/${order.id}/start`
-    else if (nextStatus === 'COMPLETED')
-      endpoint = `/api/orders/${order.id}/complete`
-    else return
-
-    await api.patch(endpoint)
-    // Refresh juste la colonne d'origine & cible
-    STATUSES.forEach(status => {
-      if ([order.status, nextStatus].includes(status.apiStatus)) {
-        fetchOrdersForStatus(status.apiStatus, status.orders)
-      }
-    })
-
-    // Notif + son
-    toast('Statut mis à jour !', { position: 'top-center', autoClose: 1800, theme: 'colored', hideProgressBar: false })
-    playSuccessSound()
-
-    drawer.value = false
-  } catch (err) {
-    toast.error('Erreur lors du changement de statut', { position: 'top-center' })
+    const audio = new Audio('https://cdn.jsdelivr.net/gh/bastify/public@main/applepay.mp3')
+    audio.volume = 0.3
+    audio.play()
+  } catch (error) {
+    console.log('Audio playback failed:', error)
   }
 }
 
-// --- Life cycle
-onMounted(setupFetchers)
-onUnmounted(cleanupFetchers)
+function toggleFullscreen() {
+  isFullscreen.value = !isFullscreen.value
+  if (isFullscreen.value) {
+    const elem = document.documentElement
+    if (elem.requestFullscreen) elem.requestFullscreen()
+    document.body.classList.add('hide-sidebar')
+  } else {
+    if (document.exitFullscreen) document.exitFullscreen()
+    document.body.classList.remove('hide-sidebar')
+  }
+}
+
+onMounted(() => {
+  setupFetchers()
+})
+
+onUnmounted(() => {
+  cleanupFetchers()
+})
 </script>
+
 <style scoped>
+/* Layout principal */
 .order-board {
-  max-width: 1400px;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 32px 8px 24px;
+  padding: 24px 16px;
+  min-height: 100vh;
 }
+
 .order-board-title {
-  font-size: 2.2rem;
-  font-weight: 700;
+  font-size: 2.4rem;
+  font-weight: 800;
   text-align: center;
-  color: #24292f;
-  letter-spacing: 2px;
+  color: #1a1a1a;
+  letter-spacing: -0.5px;
 }
 
-.status-columns {
-  gap: 12px;
+.order-board-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  position: relative;
 }
 
-.status-card {
-  min-height: 540px;
-  border-radius: 22px;
-  padding: 10px 0 18px;
-  box-shadow: 0 2px 24px 0 rgba(25, 118, 210, 0.08);
-  background: linear-gradient(120deg, #f5faff 0%, #f6f7fb 100%);
+.fullscreen-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+/* Layout des colonnes */
+.status-columns-flex {
+  display: flex;
+  gap: 24px;
+  height: calc(100vh - 200px);
+  min-height: 600px;
+}
+
+.status-column-flex {
+  flex: 1;
+  min-width: 320px;
   display: flex;
   flex-direction: column;
 }
-.status-card.ORDERED {
-  border-top: 5px solid #fbc02d;
-}
-.status-card.IN_PROGRESS {
-  border-top: 5px solid #1e88e5;
-}
-.status-card.COMPLETED {
-  border-top: 5px solid #43a047;
-  opacity: 0.94;
+
+/* Cartes de statut */
+.status-card {
+  height: 100%;
+  border-radius: 16px !important;
+  overflow: hidden;
+  background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+  display: flex;
+  flex-direction: column;
 }
 
+.status-card.ORDERED {
+  border-top: 4px solid #ff6b35;
+}
+
+.status-card.IN_PROGRESS {
+  border-top: 4px solid #2196f3;
+}
+
+.status-card.COMPLETED {
+  border-top: 4px solid #4caf50;
+}
+
+/* Header des statuts */
 .status-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 18px 18px 0 18px;
+  gap: 16px;
+  padding: 20px 24px 16px;
 }
+
+.status-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
 .status-title {
-  font-weight: 600;
-  font-size: 1.25rem;
-  letter-spacing: 1.1px;
-  color: #323e4d;
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: #2c3e50;
+  letter-spacing: -0.3px;
 }
 
 .status-icon {
   background: #fff;
   border-radius: 50%;
-  padding: 8px;
-  font-size: 2.2rem !important;
-  box-shadow: 0 2px 16px 0 rgba(25, 118, 210, 0.08);
-}
-.status-icon.ORDERED {
-  color: #fbc02d;
-}
-.status-icon.IN_PROGRESS {
-  color: #1e88e5;
-}
-.status-icon.COMPLETED {
-  color: #43a047;
-}
-.pulse {
-  animation: pulse-glow 1.7s infinite;
-}
-@keyframes pulse-glow {
-  0% { box-shadow: 0 0 0 0 #42a5f566; }
-  70% { box-shadow: 0 0 0 15px #42a5f500; }
-  100% { box-shadow: 0 0 0 0 #42a5f500; }
+  padding: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
 }
 
+.status-icon.ORDERED { color: #ff6b35; }
+.status-icon.IN_PROGRESS { color: #2196f3; }
+.status-icon.COMPLETED { color: #4caf50; }
+
+.pulse {
+  animation: pulse-glow 2s infinite;
+}
+
+@keyframes pulse-glow {
+  0% { box-shadow: 0 4px 20px rgba(33, 150, 243, 0.1); }
+  50% { box-shadow: 0 4px 25px rgba(33, 150, 243, 0.3); }
+  100% { box-shadow: 0 4px 20px rgba(33, 150, 243, 0.1); }
+}
+
+.count-chip {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+/* Liste des commandes */
 .order-list {
-  padding: 12px 18px 0 18px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+  min-height: 0;
+}
+
+/* Cartes de commande style McDo */
+.mcdo-order-card {
+  background: #fff;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  border: 2px solid #e2e8f0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.mcdo-order-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+  border-color: #3b82f6;
+}
+
+.mcdo-order-card.can-progress {
+  border-left: 4px solid #3b82f6;
+}
+
+/* Header de la commande */
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.order-number-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+}
+
+.order-amount {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: #059669;
+  background: #ecfdf5;
+  padding: 4px 12px;
+  border-radius: 6px;
+}
+
+/* Items de la commande */
+.order-items {
+  padding: 12px 16px;
+}
+
+.order-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f8fafc;
+}
+
+.order-item:last-child {
+  border-bottom: none;
+}
+
+.item-info {
+  display: flex;
+  flex-direction: column;
   flex: 1;
 }
 
-.order-card {
-  margin-bottom: 12px;
-  border-radius: 16px;
-  transition: transform 0.13s, box-shadow 0.13s, border 0.13s;
-  cursor: pointer;
-  background: #fff;
-  box-shadow: 0 2px 10px 0 rgba(25, 118, 210, 0.08);
-  border: 2px solid #e3ecf7;
-  overflow: hidden;
-}
-.order-card:hover {
-  transform: translateY(-2px) scale(1.025);
-  border-color: #1976d2;
-  box-shadow: 0 4px 20px 0 rgba(25, 118, 210, 0.12);
-}
-
-.order-card .order-number {
-  font-weight: 700;
-  color: #24292f;
-  font-size: 1.1rem;
-  letter-spacing: 0.7px;
-}
-.order-card .order-amount {
-  float: right;
+.item-name {
   font-weight: 600;
-  color: #1976d2;
+  font-size: 0.95rem;
+  color: #374151;
 }
-.order-card .order-date {
+
+.item-size {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.item-quantity {
+  background: #f3f4f6;
+  color: #374151;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 600;
   font-size: 0.85rem;
-  color: #8e99af;
-  text-align: right;
 }
 
-.order-items-preview {
+/* Footer de la commande */
+.order-footer {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px 8px;
-  padding: 0 0 2px 0;
-}
-.order-item-detail {
-  font-size: 1.01rem;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px 16px;
+  background: #f8fafc;
 }
 
-/* Drawer / Dialog */
-.v-dialog .v-card {
-  border-radius: 20px !important;
-  min-width: 340px;
-}
-.v-dialog .order-item-detail {
-  font-size: 0.97rem;
-}
-.v-dialog .v-chip {
-  font-size: 0.97rem;
+.order-time {
+  display: flex;
+  align-items: center;
+  color: #6b7280;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
-.v-btn[disabled] {
-  opacity: 0.5;
+.action-btn {
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  border-radius: 8px;
 }
 
-@media (max-width: 900px) {
-  .status-card {
-    min-height: 360px;
-    padding: 7px 0 14px;
-  }
-}
-@media (max-width: 600px) {
-  .status-columns {
-    flex-direction: column !important;
-    gap: 16px;
-  }
-  .status-card {
-    min-height: 180px;
-    padding: 3px 0 10px;
-  }
-  .order-board-title {
-    font-size: 1.3rem;
-  }
+/* Indicateur de progression */
+.progress-indicator {
+  height: 3px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
 }
 
+.progress-indicator.ORDERED {
+  background: linear-gradient(90deg, #ff6b35, #f7931e);
+}
+
+.progress-indicator.IN_PROGRESS {
+  background: linear-gradient(90deg, #2196f3, #21cbf3);
+  animation: progress-pulse 2s infinite;
+}
+
+.progress-indicator.COMPLETED {
+  background: linear-gradient(90deg, #4caf50, #81c784);
+}
+
+@keyframes progress-pulse {
+  0% { opacity: 0.7; }
+  50% { opacity: 1; }
+  100% { opacity: 0.7; }
+}
+
+/* État vide */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  text-align: center;
+  min-height: 300px;
+}
+
+.empty-text {
+  color: #94a3b8;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+/* Modals */
+.confirm-card, .details-card {
+  border-radius: 16px !important;
+}
+
+.confirm-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #065f46;
+}
+
+.confirm-text {
+  font-size: 1.1rem;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.confirm-items {
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.details-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.details-summary {
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.detail-label {
+  font-size: 0.85rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.detail-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  margin-top: 4px;
+}
+
+.detail-item {
+  padding: 12px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.detail-item:last-child {
+  border-bottom: none;
+}
+
+.item-detail-name {
+  font-weight: 600;
+  color: #374151;
+}
+
+.item-detail-size {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.item-detail-qty {
+  font-weight: 600;
+  color: #6366f1;
+  background: #eef2ff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.item-detail-price {
+  font-weight: 700;
+  color: #059669;
+  font-size: 0.95rem;
+}
+
+.total-label {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #374151;
+}
+
+.total-amount {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #059669;
+}
+
+/* Animations */
 .order-list-move,
 .order-list-enter-active,
 .order-list-leave-active {
-  transition: all 0.29s cubic-bezier(.47,1.64,.41,.8);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
 .order-list-enter-from,
 .order-list-leave-to {
   opacity: 0;
-  transform: translateY(14px) scale(0.96);
+  transform: translateY(20px) scale(0.95);
 }
+
 .order-list-leave-active {
   position: absolute;
+  width: 100%;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .status-columns-flex {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .status-column-flex {
+    min-width: 0;
+    height: auto;
+  }
+
+  .status-card {
+    min-height: 400px;
+  }
+}
+
+@media (max-width: 768px) {
+  .order-board {
+    padding: 16px 8px;
+  }
+
+  .order-board-title {
+    font-size: 1.8rem;
+  }
+
+  .status-columns-flex {
+    gap: 16px;
+  }
+
+  .mcdo-order-card {
+    margin-bottom: 12px;
+  }
+
+  .order-header {
+    padding: 12px 12px 8px;
+  }
+
+  .order-items {
+    padding: 8px 12px;
+  }
+
+  .order-footer {
+    padding: 8px 12px 12px;
+  }
+}
+
+/* Fullscreen */
+.order-board.fullscreen {
+  height: 100vh !important;
+  max-width: 100vw !important;
+  padding: 16px 8px !important;
+  margin: 0 !important;
+}
+
+.order-board.fullscreen .status-columns-flex {
+  height: calc(100vh - 120px);
+}
+
+body.hide-sidebar .sidebar,
+body.hide-sidebar .topbar,
+body.hide-sidebar nav,
+body.hide-sidebar header {
+  display: none !important;
+}
+
+/* États hover avancés */
+.mcdo-order-card.can-progress:hover .action-btn {
+  transform: scale(1.05);
+}
+
+.mcdo-order-card:hover .progress-indicator {
+  height: 4px;
+}
+
+/* Animations supplémentaires */
+@keyframes shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.mcdo-order-card.can-progress::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -200px;
+  width: 200px;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(59, 130, 246, 0.1),
+    transparent
+  );
+  animation: shimmer 3s infinite;
+}
+
+/* Styles pour les notifications toast */
+.toast-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.toast-error {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
 }
 </style>

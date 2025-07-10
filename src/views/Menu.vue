@@ -209,10 +209,12 @@ async function handleAddToCart(item) {
     });
     return;
   } finally {
-  toast.success('Cocktail ajouté avec succès', {
-    autoClose: 1000
 
-  })}
+
+      toast.success("Cocktail ajouté avec succès!", {
+        position: "top-center",
+        autoClose: 1000,
+        })}
   await fetchCart()
   }
 

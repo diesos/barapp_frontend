@@ -500,6 +500,7 @@ function formatDate(dateString: string) {
 
 function formatPrice(price: number | null | undefined) {
   if (price === null || price === undefined) return '0,00 €'
+  price = price / 100;
   return new Intl.NumberFormat('fr-FR', {
     style: 'currency',
     currency: 'EUR'

@@ -299,6 +299,7 @@ const loading = ref(false)
 const userType = ref('client') // 'client' ou 'barmaker'
 const userEmail = ref('user@example.com')
 const notificationCount = ref(2)
+const cartItems = ref([])
 
 const snackbar = ref({
   show: false,
