@@ -4,90 +4,158 @@
       <v-col cols="12">
         <h1 class="page-title mb-6">Mes Commandes</h1>
 
-        <!-- Commande en cours -->
-        <v-card
-          v-if="currentOrder"
-          class="current-order-card mb-8"
-          elevation="4"
-        >
-          <v-card-title class="current-order-title">
+        <!-- Commandes en cours -->
+        <div v-if="currentOrders.length > 0" class="current-orders-section mb-8">
+          <h2 class="section-title mb-4">
             <v-icon class="mr-2" color="primary">mdi-clock-outline</v-icon>
-            Commande en cours
-          </v-card-title>
+            Commandes en cours ({{ currentOrders.length }})
+          </h2>
 
-          <v-card-text>
-            <div class="order-header mb-4">
-              <span class="order-number">Commande #{{ currentOrder.id }}</span>
-              <span class="order-date">{{ formatDate(currentOrder.createdAt) }}</span>
-            </div>
-
-            <!-- Barre de progression avec étapes -->
-            <div class="progress-container mb-6">
-              <div class="progress-steps">
-                <div
-                  v-for="(step, index) in progressSteps"
-                  :key="step.status"
-                  class="progress-step"
-                  :class="{
-                    'active': getStepIndex(currentOrder.status) >= index,
-                    'current': getStepIndex(currentOrder.status) === index
-                  }"
-                >
-                  <div class="step-circle">
-                    <v-icon
-                      :color="getStepIndex(currentOrder.status) >= index ? 'white' : 'grey-lighten-1'"
-                      size="20"
-                    >
-                      {{ step.icon }}
-                    </v-icon>
-                  </div>
-                  <span class="step-label">{{ step.label }}</span>
-                </div>
-              </div>
-
-              <div class="progress-bar">
-                <div
-                  class="progress-fill"
-                  :style="{ width: getProgressPercentage(currentOrder.status) + '%' }"
-                ></div>
-              </div>
-            </div>
-
-            <!-- Détails de la commande -->
-            <v-row class="order-details">
-              <v-col cols="12" md="6">
-                <div class="detail-item">
-                  <strong>Statut:</strong>
-                  <v-chip
-                    :color="getStatusColor(currentOrder.status)"
-                    class="ml-2"
-                    size="small"
-                  >
-                    {{ getStatusLabel(currentOrder.status) }}
-                  </v-chip>
-                </div>
-              </v-col>
-              <v-col cols="12" md="6">
-                <div class="detail-item">
-                  <strong>Total:</strong> {{ formatPrice(currentOrder.total) }}
-                </div>
-              </v-col>
-            </v-row>
-
-            <!-- Bouton annuler si possible -->
-            <v-btn
-              v-if="currentOrder.status === 'ORDERED'"
-              @click="cancelOrder(currentOrder.id)"
-              color="error"
-              variant="outlined"
-              class="mt-4"
-              :loading="cancellingOrder"
+          <div class="current-orders-stack">
+            <v-card
+              v-for="(order, index) in currentOrders"
+              :key="order.id"
+              class="current-order-card mb-4"
+              elevation="4"
+              :style="{ 'animation-delay': `${index * 0.1}s` }"
             >
-              <v-icon class="mr-1">mdi-cancel</v-icon>
-              Annuler la commande
-            </v-btn>
-          </v-card-text>
-        </v-card>
+              <v-card-title class="current-order-title">
+                <div class="order-header">
+                  <span class="order-number">Commande #{{ order.id }}</span>
+                  <span class="order-date">{{ formatDate(order.createdAt) }}</span>
+                </div>
+              </v-card-title>
+
+              <v-card-text>
+                <!-- Barre de progression avec étapes -->
+                <div class="progress-container mb-4">
+                  <div class="progress-steps">
+                    <div
+                      v-for="(step, stepIndex) in progressSteps"
+                      :key="step.status"
+                      class="progress-step"
+                      :class="{
+                        'active': getStepIndex(order.status) >= stepIndex,
+                        'current': getStepIndex(order.status) === stepIndex
+                      }"
+                    >
+                      <div class="step-circle">
+                        <v-icon
+                          :color="getStepIndex(order.status) >= stepIndex ? 'white' : 'grey-lighten-1'"
+                          size="18"
+                        >
+                          {{ step.icon }}
+                        </v-icon>
+                      </div>
+                      <span class="step-label">{{ step.label }}</span>
+                    </div>
+                  </div>
+
+                  <div class="progress-bar">
+                    <div
+                      class="progress-fill"
+                      :style="{ width: getProgressPercentage(order.status) + '%' }"
+                    ></div>
+                  </div>
+                </div>
+
+                <!-- Résumé de la commande -->
+                <div class="order-summary mb-4">
+                  <v-row align="center">
+                    <v-col cols="12" sm="4">
+                      <div class="summary-item">
+                        <v-icon class="mr-2" size="20">mdi-package-variant</v-icon>
+                        <span>{{ order.totalItems }} article{{ order.totalItems > 1 ? 's' : '' }}</span>
+                      </div>
+                    </v-col>
+                    <v-col cols="12" sm="4">
+                      <v-chip
+                        :color="getStatusColor(order.status)"
+                        size="small"
+                      >
+                        {{ getStatusLabel(order.status) }}
+                      </v-chip>
+                    </v-col>
+                    <v-col cols="12" sm="4" class="text-right">
+                      <div class="order-total">
+                        {{ formatPrice(order.totalAmount) }}
+                      </div>
+                    </v-col>
+                  </v-row>
+                </div>
+
+                <!-- Accordéon pour les détails -->
+                <v-expansion-panels class="order-details-accordion">
+                  <v-expansion-panel>
+                    <v-expansion-panel-title>
+                      <v-icon class="mr-2">mdi-eye</v-icon>
+                      Voir les détails
+                    </v-expansion-panel-title>
+                    <v-expansion-panel-text>
+                      <div class="order-items">
+                        <div
+                          v-for="item in order.orderLines"
+                          :key="item.id"
+                          class="order-item-detailed"
+                        >
+                          <v-row align="center">
+                            <v-col cols="2">
+                              <v-avatar size="50" rounded="8">
+                                <v-img
+                                  :src="item.cocktail.imageUrl"
+                                  :alt="item.cocktail.name"
+                                  cover
+                                >
+                                  <template v-slot:placeholder>
+                                    <v-icon size="30">mdi-glass-cocktail</v-icon>
+                                  </template>
+                                </v-img>
+                              </v-avatar>
+                            </v-col>
+                            <v-col cols="5">
+                              <div class="item-info">
+                                <div class="item-name">{{ item.cocktail.name }}</div>
+                                <div class="item-size">Taille: {{ item.cocktailSize.size }}</div>
+                              </div>
+                            </v-col>
+                            <v-col cols="2" class="text-center">
+                              <div class="item-quantity">
+                                <v-chip size="small" variant="outlined">
+                                  x{{ item.quantity }}
+                                </v-chip>
+                              </div>
+                            </v-col>
+                            <v-col cols="3" class="text-right">
+                              <div class="item-price">
+                                <div class="unit-price">{{ formatPrice(item.unitPrice) }}</div>
+                                <div class="total-price">{{ formatPrice(item.totalSum) }}</div>
+                              </div>
+                            </v-col>
+                          </v-row>
+                        </div>
+                      </div>
+                    </v-expansion-panel-text>
+                  </v-expansion-panel>
+                </v-expansion-panels>
+
+                <!-- Actions -->
+                <div class="order-actions mt-4">
+                  <v-btn
+                    v-if="order.status === 'ORDERED'"
+                    @click="openCancelDialog(order)"
+                    color="error"
+                    variant="outlined"
+                    size="small"
+                    :loading="cancellingOrder === order.id"
+                  >
+                    <v-icon class="mr-1">mdi-cancel</v-icon>
+                    Annuler
+                  </v-btn>
+                </div>
+              </v-card-text>
+            </v-card>
+          </div>
+        </div>
 
         <!-- Historique des commandes -->
         <v-card class="orders-history" elevation="2">
@@ -108,7 +176,7 @@
 
             <div v-else-if="pastOrders.length === 0" class="text-center py-8">
               <v-icon size="64" color="grey-lighten-1">mdi-package-variant</v-icon>
-              <p class="mt-4 text-grey">Aucune commande trouvée</p>
+              <p class="mt-4 text-grey">Aucune commande terminée trouvée</p>
             </div>
 
             <div v-else class="orders-list">
@@ -139,7 +207,7 @@
 
                     <v-col cols="12" sm="3">
                       <div class="order-total">
-                        {{ formatPrice(order.total) }}
+                        {{ formatPrice(order.totalAmount) }}
                       </div>
                     </v-col>
 
@@ -158,6 +226,59 @@
         </v-card>
       </v-col>
     </v-row>
+
+        <!-- Modal d'annulation -->
+    <v-dialog v-model="cancelDialog" max-width="420">
+      <v-card>
+        <v-card-title>
+          <v-icon class="mr-2" color="error">mdi-alert-circle</v-icon>
+          Annulation de la commande #{{ cancelOrderData?.id }}
+        </v-card-title>
+
+        <v-card-text>
+          <div v-if="cancelCheckLoading" class="text-center py-4">
+            <v-progress-circular indeterminate color="primary" size="34"></v-progress-circular>
+            <div class="mt-3">Vérification de l’état de la commande…</div>
+          </div>
+
+          <template v-else>
+            <v-alert
+              v-if="!cancelCheckResult?.canBeCancelled"
+              type="error"
+              variant="outlined"
+              icon="mdi-block-helper"
+              class="mb-2"
+            >
+              <strong>Impossible d’annuler !</strong><br>
+              <span>{{ cancelCheckResult?.reason || 'La commande n\'est plus annulable.' }}</span>
+            </v-alert>
+            <v-alert
+              v-else
+              type="info"
+              variant="tonal"
+              icon="mdi-cancel"
+              class="mb-2"
+            >
+              <strong>Êtes-vous sûr ?</strong> Cette action est <u>irréversible</u>.
+            </v-alert>
+          </template>
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn text @click="closeCancelDialog" color="grey">Fermer</v-btn>
+          <v-btn
+            v-if="cancelCheckResult?.canBeCancelled"
+            color="error"
+            :loading="cancellingOrder === cancelOrderData?.id"
+            @click="confirmCancelOrder"
+          >
+            <v-icon left>mdi-cancel</v-icon>
+            Annuler la commande
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- Dialog pour les détails d'une commande -->
     <v-dialog v-model="orderDetailsDialog" max-width="600">
@@ -189,22 +310,38 @@
 
           <v-divider class="my-4"></v-divider>
 
-          <div v-if="selectedOrder.basketLines">
+          <div v-if="selectedOrder.orderLines">
             <h4 class="mb-3">Articles commandés</h4>
             <div
-              v-for="item in selectedOrder.basketLines"
+              v-for="item in selectedOrder.orderLines"
               :key="item.id"
-              class="order-item mb-2"
+              class="order-item mb-3"
             >
               <v-row align="center">
-                <v-col cols="8">
-                  <span>{{ item.drink.name }}</span>
+                <v-col cols="2">
+                  <v-avatar size="40" rounded="6">
+                    <v-img
+                      :src="item.cocktail.imageUrl"
+                      :alt="item.cocktail.name"
+                      cover
+                    >
+                      <template v-slot:placeholder>
+                        <v-icon size="24">mdi-glass-cocktail</v-icon>
+                      </template>
+                    </v-img>
+                  </v-avatar>
+                </v-col>
+                <v-col cols="6">
+                  <div>
+                    <div class="font-weight-medium">{{ item.cocktail.name }}</div>
+                    <div class="text-caption text-grey">Taille: {{ item.cocktailSize.size }}</div>
+                  </div>
                 </v-col>
                 <v-col cols="2" class="text-center">
                   <span>x{{ item.quantity }}</span>
                 </v-col>
                 <v-col cols="2" class="text-right">
-                  <span>{{ formatPrice(item.drink.price * item.quantity) }}</span>
+                  <span>{{ formatPrice(item.totalSum) }}</span>
                 </v-col>
               </v-row>
             </div>
@@ -214,7 +351,7 @@
 
           <v-row>
             <v-col cols="12" class="text-right">
-              <strong class="total-amount">Total: {{ formatPrice(selectedOrder.total) }}</strong>
+              <strong class="total-amount">Total: {{ formatPrice(selectedOrder.totalAmount) }}</strong>
             </v-col>
           </v-row>
         </v-card-text>
@@ -222,185 +359,229 @@
     </v-dialog>
   </v-container>
 </template>
-<script>import { ref, onMounted, onUnmounted, computed } from 'vue'
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import api from '../../utils/axios'
+import { toast } from 'vue3-toastify'
 
-export default {
-  name: 'OrdersPage',
-  setup() {
-    // État réactif
-    const orders = ref([])
-    const loading = ref(false)
-    const cancellingOrder = ref(false)
-    const refreshInterval = ref(null)
-    const orderDetailsDialog = ref(false)
-    const selectedOrder = ref(null)
+interface OrderLine {
+  id: number
+  cocktail: { imageUrl: string; name: string }
+  cocktailSize: { size: string }
+  quantity: number
+  unitPrice: number
+  totalSum: number
+}
 
-    // États de progression
-    const progressSteps = ref([
-      { status: 'ORDERED', label: 'Commandée', icon: 'mdi-cart-check' },
-      { status: 'IN_PROGRESS', label: 'En préparation', icon: 'mdi-chef-hat' },
-      { status: 'COMPLETED', label: 'Terminée', icon: 'mdi-check-circle' }
-    ])
+interface Order {
+  id: number
+  createdAt: string
+  status: string
+  totalItems: number
+  totalAmount: number
+  orderLines: OrderLine[]
+}
 
-    // Commandes calculées
-    const currentOrder = computed(() => {
-      return orders.value.find(order =>
-        order.status === 'ORDERED' || order.status === 'IN_PROGRESS'
-      )
-    })
+interface CancelCheckResult {
+  canBeCancelled: boolean
+  reason?: string
+}
 
-    const pastOrders = computed(() => {
-      return orders.value
-        .filter(order => order.status === 'COMPLETED' || order.status === 'CANCELLED')
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    })
+// --- States ---
+const orders = ref<Order[]>([])
+const loading = ref(false)
+const cancellingOrder = ref<number | null>(null)
+const refreshInterval = ref<any>(null)
 
-    // Méthodes
-    const fetchOrders = async () => {
-      try {
-        loading.value = true
-        const response = await api.get('/api/orders')
-        orders.value = response.data
-      } catch (error) {
-        console.error('Erreur lors du chargement des commandes:', error)
-      } finally {
-        loading.value = false
-      }
-    }
+const orderDetailsDialog = ref(false)
+const selectedOrder = ref<Order | null>(null)
 
-    const cancelOrder = async (orderId) => {
-      try {
-        cancellingOrder.value = true
-        await api.delete(`/api/orders/${orderId}`)
-        await fetchOrders()
-      } catch (error) {
-        console.error('Erreur lors de l\'annulation:', error)
-      } finally {
-        cancellingOrder.value = false
-      }
-    }
+const progressSteps = [
+  { status: 'ORDERED', label: 'Commandée', icon: 'mdi-cart-check' },
+  { status: 'IN_PROGRESS', label: 'En préparation', icon: 'mdi-chef-hat' },
+  { status: 'COMPLETED', label: 'Terminée', icon: 'mdi-check-circle' }
+]
 
-    const showOrderDetails = async (order) => {
-      try {
-        const response = await api.get(`/api/orders/${order.id}/details`)
-        selectedOrder.value = response.data
-        orderDetailsDialog.value = true
-      } catch (error) {
-        console.error('Erreur lors du chargement des détails:', error)
-      }
-    }
+// --- Cancel modal states ---
+const cancelDialog = ref(false)
+const cancelOrderData = ref<Order | null>(null)
+const cancelCheckLoading = ref(false)
+const cancelCheckResult = ref<CancelCheckResult | null>(null)
 
-    const getStatusLabel = (status) => {
-      const statusMap = {
-        'ORDERED': 'Commandée',
-        'IN_PROGRESS': 'En cours de préparation',
-        'COMPLETED': 'Terminée',
-        'CANCELLED': 'Annulée'
-      }
-      return statusMap[status] || status
-    }
+// --- Computed ---
+const currentOrders = computed(() =>
+  orders.value
+    .filter(order =>
+      order.status === 'ORDERED' || order.status === 'IN_PROGRESS'
+    )
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+)
 
-    const getStatusColor = (status) => {
-      const colorMap = {
-        'ORDERED': 'orange',
-        'IN_PROGRESS': 'blue',
-        'COMPLETED': 'green',
-        'CANCELLED': 'red'
-      }
-      return colorMap[status] || 'grey'
-    }
+const pastOrders = computed(() =>
+  orders.value
+    .filter(order => order.status === 'COMPLETED' || order.status === 'CANCELLED')
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+)
 
-    const getStepIndex = (status) => {
-      const stepMap = {
-        'ORDERED': 0,
-        'IN_PROGRESS': 1,
-        'COMPLETED': 2
-      }
-      return stepMap[status] ?? -1
-    }
-
-    const getProgressPercentage = (status) => {
-      const percentageMap = {
-        'ORDERED': 33,
-        'IN_PROGRESS': 66,
-        'COMPLETED': 100
-      }
-      return percentageMap[status] || 0
-    }
-
-    const formatDate = (dateString) => {
-      if (!dateString) return ''
-      const date = new Date(dateString)
-      return date.toLocaleDateString('fr-FR', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    }
-
-    const formatPrice = (price) => {
-      if (price === null || price === undefined) return '0,00 €'
-      return new Intl.NumberFormat('fr-FR', {
-        style: 'currency',
-        currency: 'EUR'
-      }).format(price)
-    }
-
-    const startRefreshInterval = () => {
-      refreshInterval.value = setInterval(async () => {
-        if (currentOrder.value) {
-          await fetchOrders()
-        }
-      }, 4000)
-    }
-
-    const stopRefreshInterval = () => {
-      if (refreshInterval.value) {
-        clearInterval(refreshInterval.value)
-        refreshInterval.value = null
-      }
-    }
-
-    // Cycle de vie
-    onMounted(async () => {
-      await fetchOrders()
-      startRefreshInterval()
-    })
-
-    onUnmounted(() => {
-      stopRefreshInterval()
-    })
-
-    return {
-      // État
-      orders,
-      loading,
-      cancellingOrder,
-      orderDetailsDialog,
-      selectedOrder,
-      progressSteps,
-
-      // Computed
-      currentOrder,
-      pastOrders,
-
-      // Méthodes
-      fetchOrders,
-      cancelOrder,
-      showOrderDetails,
-      getStatusLabel,
-      getStatusColor,
-      getStepIndex,
-      getProgressPercentage,
-      formatDate,
-      formatPrice
-    }
+// --- Methods ---
+async function fetchOrders() {
+  try {
+    loading.value = true
+    const response = await api.get('/api/orders')
+    orders.value = response.data
+  } catch (error) {
+    console.error('Erreur lors du chargement des commandes:', error)
+  } finally {
+    loading.value = false
   }
 }
+
+function showOrderDetails(order: Order) {
+  api.get(`/api/orders/${order.id}/details`)
+    .then(response => {
+      selectedOrder.value = response.data
+      orderDetailsDialog.value = true
+    })
+    .catch(error => {
+      console.error('Erreur lors du chargement des détails:', error)
+    })
+}
+
+function getStatusLabel(status: string) {
+  const statusMap: Record<string, string> = {
+    'ORDERED': 'Commandée',
+    'IN_PROGRESS': 'En cours de préparation',
+    'COMPLETED': 'Terminée',
+    'CANCELLED': 'Annulée'
+  }
+  return statusMap[status] || status
+}
+
+function getStatusColor(status: string) {
+  const colorMap: Record<string, string> = {
+    'ORDERED': 'orange',
+    'IN_PROGRESS': 'blue',
+    'COMPLETED': 'green',
+    'CANCELLED': 'red'
+  }
+  return colorMap[status] || 'grey'
+}
+
+function getStepIndex(status: string) {
+  const stepMap: Record<string, number> = {
+    'ORDERED': 0,
+    'IN_PROGRESS': 1,
+    'COMPLETED': 2
+  }
+  return stepMap[status] ?? -1
+}
+
+function getProgressPercentage(status: string) {
+  const percentageMap: Record<string, number> = {
+    'ORDERED': 33,
+    'IN_PROGRESS': 66,
+    'COMPLETED': 100
+  }
+  return percentageMap[status] || 0
+}
+
+function formatDate(dateString: string) {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+  return date.toLocaleDateString('fr-FR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+function formatPrice(price: number | null | undefined) {
+  if (price === null || price === undefined) return '0,00 €'
+  return new Intl.NumberFormat('fr-FR', {
+    style: 'currency',
+    currency: 'EUR'
+  }).format(price)
+}
+
+function startRefreshInterval() {
+  refreshInterval.value = setInterval(async () => {
+    if (currentOrders.value.length > 0) {
+      await fetchOrders()
+    }
+  }, 4000)
+}
+
+function stopRefreshInterval() {
+  if (refreshInterval.value) {
+    clearInterval(refreshInterval.value)
+    refreshInterval.value = null
+  }
+}
+
+// --- Cancel modal logic ---
+async function openCancelDialog(order: Order) {
+  cancelDialog.value = true
+  cancelOrderData.value = order
+  cancelCheckLoading.value = true
+  cancelCheckResult.value = null
+
+  // UX : fake loading + check backend avec le status le + fiable
+  setTimeout(async () => {
+    try {
+      // Utilisation du endpoint backend pour status à jour
+      const res = await api.get('/api/orders/status/ORDERED')
+      const found = res.data.find((o: Order) => o.id === order.id)
+      if (found) {
+        cancelCheckResult.value = { canBeCancelled: true }
+      } else {
+        cancelCheckResult.value = { canBeCancelled: false, reason: "La commande n'est plus annulable (déjà en cours ou terminée)." }
+      }
+    } catch (e) {
+      cancelCheckResult.value = { canBeCancelled: false, reason: "Erreur lors du check d'annulabilité." }
+    } finally {
+      cancelCheckLoading.value = false
+    }
+  }, 1200)
+}
+
+function closeCancelDialog() {
+  cancelDialog.value = false
+  cancelOrderData.value = null
+  cancelCheckResult.value = null
+  cancelCheckLoading.value = false
+}
+
+async function confirmCancelOrder() {
+  if (!cancelOrderData.value) return
+  cancellingOrder.value = cancelOrderData.value.id
+  try {
+    await api.delete(`/api/orders/${cancelOrderData.value.id}`)
+    await fetchOrders()
+    closeCancelDialog()
+  } catch (err) {
+    cancelCheckResult.value = { canBeCancelled: false, reason: "Erreur lors de l'annulation." }
+  } finally {
+    toast.success("Commande annulée avec succès !", {
+        position: "top-center"
+        })
+    cancellingOrder.value = null
+  }
+}
+
+// --- Lifecycle ---
+onMounted(async () => {
+  await fetchOrders()
+  startRefreshInterval()
+})
+
+onUnmounted(() => {
+  stopRefreshInterval()
+})
 </script>
+
 <style scoped>
 .orders-page {
   max-width: 1200px;
@@ -415,12 +596,31 @@ export default {
   text-align: center;
 }
 
-/* Commande en cours */
+/* Commandes en cours */
+.current-orders-section {
+  margin-bottom: 2rem;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1976d2;
+  display: flex;
+  align-items: center;
+}
+
+.current-orders-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .current-order-card {
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   border-radius: 16px;
   overflow: hidden;
   position: relative;
+  animation: slideInFromTop 0.6s ease-out both;
 }
 
 .current-order-card::before {
@@ -434,28 +634,108 @@ export default {
 }
 
 .current-order-title {
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: #1976d2;
-  padding: 20px 24px 16px;
+  padding: 16px 24px 8px;
 }
 
 .order-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  width: 100%;
 }
 
 .order-number {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #333;
 }
 
 .order-date {
   color: #666;
+  font-size: 0.85rem;
+}
+
+/* Résumé de commande */
+.order-summary {
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
   font-size: 0.9rem;
+  color: #666;
+}
+
+.order-total {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1976d2;
+}
+
+/* Accordéon détails */
+.order-details-accordion {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.order-items {
+  padding: 8px 0;
+}
+
+.order-item-detailed {
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.order-item-detailed:last-child {
+  border-bottom: none;
+}
+
+.item-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.item-name {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.item-size {
+  color: #666;
+  font-size: 0.8rem;
+}
+
+.item-quantity {
+  text-align: center;
+}
+
+.item-price {
+  text-align: right;
+}
+
+.unit-price {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.total-price {
+  font-weight: 600;
+  color: #1976d2;
+}
+
+.order-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* Barre de progression */
@@ -482,16 +762,16 @@ export default {
 }
 
 .step-circle {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: #e0e0e0;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.3s ease;
-  margin-bottom: 8px;
-  border: 3px solid #e0e0e0;
+  margin-bottom: 6px;
+  border: 2px solid #e0e0e0;
 }
 
 .progress-step.active .step-circle {
@@ -532,10 +812,10 @@ export default {
 
 .progress-bar {
   position: absolute;
-  top: 44px;
-  left: 24px;
-  right: 24px;
-  height: 4px;
+  top: 38px;
+  left: 20px;
+  right: 20px;
+  height: 3px;
   background: #e0e0e0;
   border-radius: 2px;
   z-index: 1;
@@ -558,6 +838,16 @@ export default {
 
 .detail-item {
   margin-bottom: 8px;
+}
+
+/* Dialog */
+.order-item {
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.order-item:last-child {
+  border-bottom: none;
 }
 
 /* Historique des commandes */
@@ -604,16 +894,6 @@ export default {
   color: #1976d2;
 }
 
-/* Dialog */
-.order-item {
-  padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.order-item:last-child {
-  border-bottom: none;
-}
-
 .total-amount {
   font-size: 1.2rem;
   color: #1976d2;
@@ -657,7 +937,7 @@ export default {
 }
 
 /* Animations d'entrée */
-.current-order-card {
+.current-orders-section {
   animation: slideInFromTop 0.6s ease-out;
 }
 

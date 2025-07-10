@@ -28,6 +28,11 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import('../views/crud/Cocktail.vue'),
   },
   {
+    path: '/admin/orders',
+    name: 'OrderManagement',
+    component: () => import('../views/crud/AdminOrders.vue'),
+  },
+  {
     path: '/admin/categories',
     name: 'CategorieManagement',
     component: () => import('../views/crud/Categorie.vue'),

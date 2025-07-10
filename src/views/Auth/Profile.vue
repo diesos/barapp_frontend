@@ -100,6 +100,7 @@
                       >
                         {{ getStatusLabel(order.status) }}
                       </v-chip>
+                      - {{order.totalItems }} article - {{order.totalAmount}} €
                     </v-list-item-subtitle>
                   </v-list-item>
                 </v-list>
